@@ -6,6 +6,13 @@ export interface ValidationRule {
   message?: string;
 }
 
+export interface PaymentConfig {
+  provider: 'paypal';
+  amount: number;
+  currency: string;
+  description?: string;
+}
+
 export interface FormField {
   id: string;
   type: string;
@@ -13,6 +20,7 @@ export interface FormField {
   label: string;
   required: boolean;
   validation?: ValidationRule[];
+  payment?: PaymentConfig;
 }
 
 export interface ValidationResult {
@@ -23,7 +31,7 @@ export interface ValidationResult {
 const validation = {
   validate(fields: FormField[], data: Record<string, any>): ValidationResult {
     const errors: Record<string, string[]> = {};
-    const decorative = ['heading', 'paragraph', 'divider', 'hidden'];
+    const decorative = ['heading', 'paragraph', 'divider', 'hidden', 'payment'];
 
     for (const field of fields) {
       if (decorative.includes(field.type)) continue;

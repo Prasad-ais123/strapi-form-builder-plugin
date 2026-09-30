@@ -152,11 +152,15 @@ function embedScript(): string {
 
     if (captchaOn) mountCaptcha(formEl, captchaCfg);
 
-    var btn = document.createElement('button');
-    btn.type = 'submit';
-    btn.className = 'sfb-btn';
-    btn.textContent = (form.settings && form.settings.submitButtonText) || 'Submit';
-    formEl.appendChild(btn);
+    var hasPayment = (form.fields || []).some(function (f) { return f.type === 'payment'; });
+    var btn = null;
+    if (!hasPayment) {
+      btn = document.createElement('button');
+      btn.type = 'submit';
+      btn.className = 'sfb-btn';
+      btn.textContent = (form.settings && form.settings.submitButtonText) || 'Submit';
+      formEl.appendChild(btn);
+    }
 
     var submitText = (form.settings && form.settings.submitButtonText) || 'Submit';
 
@@ -182,8 +186,10 @@ function embedScript(): string {
     formEl.addEventListener('submit', function (e) {
       e.preventDefault();
       clearErrors();
-      btn.disabled = true;
-      btn.textContent = 'Sending…';
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Sending…';
+      }
 
       // collect form data, handling checkbox-group arrays
       var data = {};
@@ -205,12 +211,15 @@ function embedScript(): string {
 
         // client-side guard: don't even hit the server without a challenge token
         if (!data._fc_captcha) {
-          btn.disabled = false;
-          btn.textContent = submitText;
+          if (btn) {
+            btn.disabled = false;
+            btn.textContent = submitText;
+          }
           var ce = document.createElement('p');
           ce.className = 'sfb-error';
           ce.textContent = 'Please complete the verification challenge.';
-          formEl.insertBefore(ce, btn);
+          if (btn) formEl.insertBefore(ce, btn);
+          else formEl.appendChild(ce);
           return;
         }
       }
@@ -247,8 +256,10 @@ function embedScript(): string {
           el.appendChild(wrap);
         })
         .catch(function (body) {
-          btn.disabled = false;
-          btn.textContent = submitText;
+          if (btn) {
+            btn.disabled = false;
+            btn.textContent = submitText;
+          }
           // captcha tokens are single-use — reset the widget so the user can retry
           if (captchaOn && captchaCfg.provider === 'turnstile' && window.turnstile) window.turnstile.reset();
           if (captchaOn && captchaCfg.provider === 'recaptcha' && window.grecaptcha) window.grecaptcha.reset();
@@ -258,7 +269,8 @@ function embedScript(): string {
             var errEl = document.createElement('p');
             errEl.className = 'sfb-error';
             errEl.textContent = (body && body.message) ? body.message : 'Something went wrong. Please try again.';
-            formEl.insertBefore(errEl, btn);
+            if (btn) formEl.insertBefore(errEl, btn);
+            else formEl.appendChild(errEl);
           }
         });
     });
@@ -396,6 +408,30 @@ function embedScript(): string {
       clbl.appendChild(cb);
       clbl.appendChild(document.createTextNode(' ' + (field.label || '')));
       return clbl;
+    }
+
+    if (field.type === 'payment') {
+      var p = field.payment || { provider: 'paypal', amount: 1, currency: 'USD', description: '' };
+      var box = document.createElement('div');
+      box.className = 'sfb-payment-placeholder';
+      box.style.cssText = 'border:1px solid #dcdce4;border-radius:6px;padding:12px 14px;background:#f6f6f9;display:flex;flex-direction:column;gap:8px;';
+      if (p.description) {
+        var pDesc = document.createElement('div');
+        pDesc.style.cssText = 'font-size:12px;color:#666687;';
+        pDesc.textContent = p.description;
+        box.appendChild(pDesc);
+      }
+      var pAmt = document.createElement('div');
+      pAmt.style.cssText = 'font-size:16px;font-weight:700;color:#32324d;';
+      pAmt.textContent = (p.currency || 'USD') + ' ' + Number(p.amount ?? 1).toLocaleString();
+      box.appendChild(pAmt);
+      var pBtn = document.createElement('button');
+      pBtn.type = 'button';
+      pBtn.disabled = true;
+      pBtn.style.cssText = 'height:38px;background:#0070ba;color:#fff;border:none;border-radius:4px;font-weight:600;cursor:not-allowed;opacity:0.85;';
+      pBtn.textContent = 'Pay with PayPal';
+      box.appendChild(pBtn);
+      return box;
     }
 
     var typeMap = { text:'text', email:'email', number:'number', phone:'tel',

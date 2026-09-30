@@ -52,6 +52,9 @@ export const FIELD_CATEGORIES: { cat: string; items: FieldMeta[] }[] = [
     { type: 'paragraph', name: 'Paragraph', cat: 'Content', deco: true },
     { type: 'divider', name: 'Divider', cat: 'Content', deco: true },
   ]},
+  { cat: 'Payment', items: [
+    { type: 'payment', name: 'Payment', cat: 'Payment' },
+  ]},
 ];
 
 export const DECORATIVE: FieldType[] = ['heading', 'paragraph', 'divider'];
@@ -60,6 +63,7 @@ export const isDecorative = (t: FieldType) => DECORATIVE.includes(t);
 // Human type name for canvas rows ("— text", "— textarea", …)
 const TYPE_NAMES: Partial<Record<FieldType, string>> = {
   'checkbox-group': 'checkboxes',
+  payment: 'payment',
 };
 export const typeName = (t: FieldType) => TYPE_NAMES[t] || t;
 
@@ -71,7 +75,7 @@ const ICON_COMPONENTS: Partial<Record<FieldType, React.ComponentType<any>>> = {
   'checkbox-group': ListPlus, date: Calendar, time: Clock,
 };
 const GLYPHS: Partial<Record<FieldType, string>> = {
-  text: 'T', radio: '◉', heading: 'H', paragraph: '¶', divider: '—', hidden: '⊘',
+  text: 'T', radio: '◉', heading: 'H', paragraph: '¶', divider: '—', hidden: '⊘', payment: '$',
 };
 
 export function FieldIcon({ type, size = 16 }: { type: FieldType; size?: number }) {

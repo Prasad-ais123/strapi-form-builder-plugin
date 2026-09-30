@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Trash } from '@strapi/icons';
-import { FormField, FieldOption, ValidationRule } from '../types';
+import { FormField, FieldOption, ValidationRule, PaymentConfig } from '../types';
 import { C, FF, isDecorative, typeName } from '../ui';
 
 interface Props {
@@ -101,6 +101,17 @@ export function FieldSettingsPanel({ field, onChange }: Props) {
   const isHidden = field.type === 'hidden';
   const [tab, setTab] = useState<'general' | 'validation'>('general');
   const update = (patch: Partial<FormField>) => onChange({ ...field, ...patch });
+  const isPayment = field.type === 'payment';
+  const updatePayment = (patch: Partial<PaymentConfig>) =>
+    update({
+      payment: {
+        provider: field.payment?.provider || 'paypal',
+        amount: Math.max(1, field.payment?.amount ?? 1),
+        currency: field.payment?.currency || 'USD',
+        description: field.payment?.description || '',
+        ...patch,
+      },
+    });
 
   const hasOptions = ['select', 'radio', 'checkbox-group'].includes(field.type);
 
@@ -123,6 +134,7 @@ export function FieldSettingsPanel({ field, onChange }: Props) {
   // "required" is a boolean flag; its custom message lives in a validation rule of type 'required'
   const reqMsg = field.validation.find((v) => v.type === 'required')?.message || '';
   const setRequired = (on: boolean) => {
+    if (isPayment) return;
     const rest = field.validation.filter((v) => v.type !== 'required');
     update({ required: on, validation: on ? field.validation : rest });
   };
@@ -180,6 +192,53 @@ export function FieldSettingsPanel({ field, onChange }: Props) {
                   onChange={(v) => update({ placeholder: v })}
                 />
               )}
+              {isPayment && (
+                <>
+                  <Labeled label="Payment Provider">
+                    <select
+                      className="sfb-inp"
+                      value={field.payment?.provider || 'paypal'}
+                      onChange={(e) => updatePayment({ provider: e.target.value as 'paypal' })}
+                      style={{ ...inpStyle, cursor: 'pointer' }}
+                    >
+                      <option value="paypal">PayPal</option>
+                    </select>
+                  </Labeled>
+                  <Labeled label="Currency">
+                    <select
+                      className="sfb-inp"
+                      value={field.payment?.currency || 'USD'}
+                      onChange={(e) => updatePayment({ currency: e.target.value })}
+                      style={{ ...inpStyle, cursor: 'pointer' }}
+                    >
+                      <option value="USD">USD</option>
+                      <option value="EUR">EUR</option>
+                      <option value="GBP">GBP</option>
+                      <option value="INR">INR</option>
+                    </select>
+                  </Labeled>
+                  <Labeled label="Amount">
+                    <input
+                      type="number"
+                      min="1"
+                      step="any"
+                      className="sfb-inp"
+                      value={field.payment?.amount ?? 1}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        updatePayment({ amount: isNaN(val) ? 1 : Math.max(1, val) });
+                      }}
+                      style={inpStyle}
+                    />
+                  </Labeled>
+                  <TextField
+                    label="Description"
+                    value={field.payment?.description || ''}
+                    onChange={(v) => updatePayment({ description: v })}
+                    placeholder="e.g. Registration Fee"
+                  />
+                </>
+              )}
               <TextField label="Help text" value={field.helpText || ''} onChange={(v) => update({ helpText: v })} />
             </>
           )}
@@ -215,10 +274,12 @@ export function FieldSettingsPanel({ field, onChange }: Props) {
           {/* Required — flag + custom message */}
           <div style={{ border: `1px solid ${C.n200}`, borderRadius: 5, padding: 11, display: 'flex', flexDirection: 'column', gap: 8, background: C.n0 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ font: `600 13px ${FF}`, color: C.n800 }}>Required</span>
-              <Toggle on={field.required} onClick={() => setRequired(!field.required)} />
+              <span style={{ font: `600 13px ${FF}`, color: C.n800 }}>
+                Required {isPayment && <span style={{ font: `400 11px ${FF}`, color: C.n500 }}>(always required)</span>}
+              </span>
+              <Toggle on={isPayment ? true : field.required} onClick={() => !isPayment && setRequired(!field.required)} />
             </div>
-            {field.required && (
+            {(isPayment || field.required) && (
               <input className="sfb-inp" value={reqMsg} placeholder={`${field.label || 'This field'} is required`} onChange={(e) => setReqMsg(e.target.value)} style={inpStyle} />
             )}
           </div>

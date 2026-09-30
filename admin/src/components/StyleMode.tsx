@@ -85,6 +85,18 @@ function PreviewInput({ field }: { field: FormField }) {
       ))}
     </div>
   );
+  if (field.type === 'payment') {
+    const p = field.payment || { provider: 'paypal', amount: 1, currency: 'USD', description: '' };
+    return (
+      <div style={{ border: `1px solid ${C.n200}`, borderRadius: 6, padding: '12px 14px', background: C.n100, display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {p.description && <div style={{ fontSize: 12, color: C.n600 }}>{p.description}</div>}
+        <div style={{ fontSize: 16, fontWeight: 700, color: C.n900 }}>{p.currency || 'USD'} {Number(p.amount ?? 1).toLocaleString()}</div>
+        <button type="button" disabled style={{ height: 36, background: '#0070ba', color: '#fff', border: 'none', borderRadius: 4, fontWeight: 600, fontSize: 13, cursor: 'not-allowed', opacity: 0.85 }}>
+          Pay with PayPal
+        </button>
+      </div>
+    );
+  }
   const typeMap: Record<string, string> = { text: 'text', email: 'email', number: 'number', phone: 'tel', password: 'password', url: 'url', date: 'date', time: 'time' };
   return <input className="sfb-input" type={typeMap[field.type] || 'text'} placeholder={ph} readOnly />;
 }
@@ -115,7 +127,7 @@ function PreviewForm({ title, description, fields, settings }: { title: string; 
             );
           })}
         </div>
-        {fields.length > 0 && <button type="submit" className="sfb-btn">{settings.submitButtonText || 'Submit'}</button>}
+        {fields.length > 0 && !fields.some((f) => f.type === 'payment') && <button type="submit" className="sfb-btn">{settings.submitButtonText || 'Submit'}</button>}
       </form>
     </>
   );

@@ -148,7 +148,7 @@ export function FormListPage() {
     <Box padding={8}>
       <Flex justifyContent="space-between" alignItems="flex-start" marginBottom={6}>
         <Box>
-          <Typography variant="alpha" as="h1">Forms</Typography>
+          <Typography variant="alpha" tag="h1">Forms</Typography>
           <Box marginTop={1}>
             <Typography variant="epsilon" textColor="neutral600">
               Build, publish and embed forms on any site.

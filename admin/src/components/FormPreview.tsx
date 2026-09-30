@@ -227,6 +227,47 @@ function CheckboxGroupField({ field }: { field: FormField }) {
   );
 }
 
+function PaymentField({ field }: { field: FormField }) {
+  const p = field.payment || { provider: 'paypal', amount: 1, currency: 'USD', description: '' };
+  const formattedAmount = `${p.currency || 'USD'} ${Number(p.amount ?? 1).toLocaleString()}`;
+  return (
+    <div style={fieldWrap}>
+      <Label field={field} />
+      {p.description && (
+        <p style={{ ...helpStyle, fontSize: 13, color: TOKEN.sub, marginTop: 2, marginBottom: 2 }}>
+          {p.description}
+        </p>
+      )}
+      <div style={{ fontSize: 18, fontWeight: 700, color: TOKEN.text, margin: '4px 0' }}>
+        {formattedAmount}
+      </div>
+      <button
+        type="button"
+        disabled
+        style={{
+          width: '100%',
+          height: 42,
+          padding: '0 16px',
+          background: '#0070ba',
+          color: '#ffffff',
+          border: 'none',
+          borderRadius: TOKEN.radius,
+          fontSize: 14,
+          fontWeight: 700,
+          cursor: 'not-allowed',
+          opacity: 0.85,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        Pay with PayPal
+      </button>
+      {field.helpText && <p style={helpStyle}>{field.helpText}</p>}
+    </div>
+  );
+}
+
 /* ── dispatcher ─────────────────────────────────────────────────────── */
 
 function PreviewField({ field }: { field: FormField }) {
@@ -261,12 +302,13 @@ function PreviewField({ field }: { field: FormField }) {
 
   let content: React.ReactNode;
   switch (field.type) {
-    case 'textarea':      content = <TextareaField field={field} />; break;
-    case 'select':        content = <SelectField field={field} />; break;
-    case 'radio':         content = <RadioField field={field} />; break;
-    case 'checkbox':      content = <CheckboxField field={field} />; break;
+    case 'textarea':       content = <TextareaField field={field} />; break;
+    case 'select':         content = <SelectField field={field} />; break;
+    case 'radio':          content = <RadioField field={field} />; break;
+    case 'checkbox':       content = <CheckboxField field={field} />; break;
     case 'checkbox-group': content = <CheckboxGroupField field={field} />; break;
-    default:              content = <TextField field={field} />; break;
+    case 'payment':        content = <PaymentField field={field} />; break;
+    default:               content = <TextField field={field} />; break;
   }
 
   return <div className={field.cssClass || undefined} style={{ gridColumn: `span ${colSpan}` }}>{content}</div>;
@@ -322,7 +364,7 @@ export function FormPreview({ title, description, fields, settings, open, onClos
                   ))}
                 </div>
               )}
-              {fields.length > 0 && (
+              {fields.length > 0 && !fields.some((f) => f.type === 'payment') && (
                 <button
                   type="submit"
                   style={{ marginTop: 26, height: 48, width: '100%', borderRadius: TOKEN.radius, background: TOKEN.accent, color: '#fff', fontSize: 15, fontWeight: 600, fontFamily: 'inherit', border: 'none', cursor: 'pointer' }}

@@ -283,13 +283,22 @@ function createField(type: FieldType, order: number): FormField {
     label: type.charAt(0).toUpperCase() + type.slice(1),
     placeholder: '',
     helpText: '',
-    required: false,
+    required: type === 'payment',
     order,
     width: 'full',
     options: ['select', 'radio', 'checkbox-group'].includes(type)
       ? [{ label: 'Option 1', value: 'option_1' }]
       : undefined,
     validation: [],
+    payment:
+      type === 'payment'
+        ? {
+            provider: 'paypal',
+            amount: 1,
+            currency: 'USD',
+            description: '',
+          }
+        : undefined,
   };
 }
 

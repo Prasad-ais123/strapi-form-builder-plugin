@@ -17,7 +17,15 @@ export type FieldType =
   | 'hidden'
   | 'heading'
   | 'paragraph'
-  | 'divider';
+  | 'divider'
+  | 'payment';
+
+export interface PaymentConfig {
+  provider: 'paypal';
+  amount: number;
+  currency: string;
+  description?: string;
+}
 
 export interface FieldOption {
   label: string;
@@ -45,6 +53,7 @@ export interface FormField {
   options?: FieldOption[];
   validation: ValidationRule[];
   cssClass?: string;
+  payment?: PaymentConfig;
 }
 
 export interface ConditionalRule {
