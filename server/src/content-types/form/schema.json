@@ -30,8 +30,10 @@
         "enableRateLimit": true,
         "maxSubmissionsPerHour": 60,
         "notificationEmails": [],
-        "redirectUrl": "",
+        "redirectUrl": "/",
         "customCss": "",
+        "startDate": null,
+        "expiryDate": null,
         "captcha": { "provider": "none", "siteKey": "", "secretKey": "" }
       }
     },

@@ -78,6 +78,8 @@ export interface FormSettings {
   redirectUrl: string;
   customCss: string;
   publicPage: boolean;
+  startDate?: string | null;
+  expiryDate?: string | null;
   captcha?: {
     provider: 'none' | 'turnstile' | 'recaptcha';
     siteKey: string;

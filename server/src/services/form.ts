@@ -108,7 +108,9 @@ export function publicSchemaFrom(form: any) {
   // Never leak the CAPTCHA secret key to the browser — strip it, keep the public site key.
   const safeSettings = settings.captcha
     ? { ...settings, captcha: { provider: settings.captcha.provider, siteKey: settings.captcha.siteKey } }
-    : settings;
+    : { ...settings };
+  safeSettings.startDate = settings.startDate ?? null;
+  safeSettings.expiryDate = settings.expiryDate ?? null;
   return {
     data: {
       id: form.id,

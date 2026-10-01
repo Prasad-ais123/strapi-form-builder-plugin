@@ -98,6 +98,40 @@ function embedScript(): string {
   }
 
   function mount(el, form, base) {
+    var startDate = form.settings && form.settings.startDate;
+    if (startDate && new Date() < new Date(startDate)) {
+      var wrapStart = document.createElement('div');
+      wrapStart.className = 'sfb-form';
+      if (form.settings && form.settings.themeVars) {
+        var tvs = form.settings.themeVars;
+        for (var ks in tvs) { if (Object.prototype.hasOwnProperty.call(tvs, ks)) wrapStart.style.setProperty(ks, tvs[ks]); }
+      }
+      var startMsg = document.createElement('p');
+      startMsg.className = 'sfb-error sfb-not-started';
+      startMsg.textContent = 'This form is not yet accepting responses.';
+      wrapStart.appendChild(startMsg);
+      el.innerHTML = '';
+      el.appendChild(wrapStart);
+      return;
+    }
+
+    var expiryDate = form.settings && form.settings.expiryDate;
+    if (expiryDate && new Date() >= new Date(expiryDate)) {
+      var wrap = document.createElement('div');
+      wrap.className = 'sfb-form';
+      if (form.settings && form.settings.themeVars) {
+        var tv = form.settings.themeVars;
+        for (var k in tv) { if (Object.prototype.hasOwnProperty.call(tv, k)) wrap.style.setProperty(k, tv[k]); }
+      }
+      var expMsg = document.createElement('p');
+      expMsg.className = 'sfb-error sfb-expired';
+      expMsg.textContent = 'This form has expired and is no longer accepting responses.';
+      wrap.appendChild(expMsg);
+      el.innerHTML = '';
+      el.appendChild(wrap);
+      return;
+    }
+
     var formEl = document.createElement('form');
     formEl.className = 'sfb-form';
     // let the plugin's own validation + server errors drive messages instead of

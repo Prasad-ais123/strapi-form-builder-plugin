@@ -24,9 +24,11 @@ const DEFAULT_SETTINGS: FormSettings = {
   enableRateLimit: true,
   maxSubmissionsPerHour: 60,
   notificationEmails: [],
-  redirectUrl: '',
+  redirectUrl: '/',
   customCss: '',
   publicPage: false,
+  startDate: null,
+  expiryDate: null,
   captcha: { provider: 'none', siteKey: '', secretKey: '' },
   enableStyle: false,
   theme: DEFAULT_THEME,
@@ -91,6 +93,19 @@ function ToggleRow({ label, hint, on, onClick }: { label: string; hint: string; 
       <DrawerToggle on={on} onClick={onClick} />
     </div>
   );
+}
+
+function toLocalDatetimeInput(isoString?: string | null): string {
+  if (!isoString) return '';
+  const d = new Date(isoString);
+  if (isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const year = d.getFullYear();
+  const month = pad(d.getMonth() + 1);
+  const day = pad(d.getDate());
+  const hours = pad(d.getHours());
+  const minutes = pad(d.getMinutes());
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
 }
 
 function SettingsDrawer({ initialDescription, initialSettings, slug, publishedAt, onClose, onSave, onToggleStyle, onOpenStyle }: {
@@ -162,6 +177,95 @@ function SettingsDrawer({ initialDescription, initialSettings, slug, publishedAt
             <div style={{ marginTop: 16 }}>
               <label style={dLbl}>Success message</label>
               <input value={settings.successMessage} onChange={(e) => patch({ successMessage: e.target.value })} style={dInp} />
+            </div>
+            <div style={{ marginTop: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <label style={dLbl}>Start date</label>
+                {settings.startDate && (
+                  <button
+                    type="button"
+                    onClick={() => patch({ startDate: null })}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: C.dng600,
+                      font: `600 11px ${FF}`,
+                      cursor: 'pointer',
+                      padding: 0,
+                      marginBottom: 6,
+                    }}
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+              <input
+                type="datetime-local"
+                value={toLocalDatetimeInput(settings.startDate)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (!val) {
+                    patch({ startDate: null });
+                  } else {
+                    const d = new Date(val);
+                    patch({ startDate: isNaN(d.getTime()) ? null : d.toISOString() });
+                  }
+                }}
+                style={{ ...dInp, cursor: 'pointer' }}
+              />
+              <div style={dHint}>Optional. Submissions will open after this date and time.</div>
+              {settings.startDate && new Date(settings.startDate).getTime() > Date.now() && (
+                <div style={{ ...dHint, color: C.p600, marginTop: 4 }}>
+                  ℹ Scheduled — this form will not accept responses until this start time.
+                </div>
+              )}
+            </div>
+            <div style={{ marginTop: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <label style={dLbl}>Expiry date</label>
+                {settings.expiryDate && (
+                  <button
+                    type="button"
+                    onClick={() => patch({ expiryDate: null })}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: C.dng600,
+                      font: `600 11px ${FF}`,
+                      cursor: 'pointer',
+                      padding: 0,
+                      marginBottom: 6,
+                    }}
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+              <input
+                type="datetime-local"
+                value={toLocalDatetimeInput(settings.expiryDate)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (!val) {
+                    patch({ expiryDate: null });
+                  } else {
+                    const d = new Date(val);
+                    patch({ expiryDate: isNaN(d.getTime()) ? null : d.toISOString() });
+                  }
+                }}
+                style={{ ...dInp, cursor: 'pointer' }}
+              />
+              <div style={dHint}>Optional. Submissions will be closed after this date and time.</div>
+              {settings.expiryDate && new Date(settings.expiryDate).getTime() <= Date.now() && (
+                <div style={{ ...dHint, color: C.wrn700, marginTop: 4 }}>
+                  ⚠ This date is in the past — the form is currently expired and will not accept submissions.
+                </div>
+              )}
+              {settings.startDate && settings.expiryDate && new Date(settings.startDate).getTime() > new Date(settings.expiryDate).getTime() && (
+                <div style={{ ...dHint, color: C.dng600, marginTop: 4 }}>
+                  ⚠ Start date is after expiry date. Form will remain closed.
+                </div>
+              )}
             </div>
           </div>
 

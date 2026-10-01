@@ -10,6 +10,7 @@ describe('isSafeRedirect (post-submit redirect guard)', () => {
   });
 
   it('allows relative paths (resolved against the current page)', () => {
+    expect(isSafeRedirect('/', BASE)).toBe(true);
     expect(isSafeRedirect('/thanks', BASE)).toBe(true);
     expect(isSafeRedirect('thank-you', BASE)).toBe(true);
   });

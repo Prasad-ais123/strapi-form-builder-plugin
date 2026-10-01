@@ -77,6 +77,20 @@ export default ({ strapi }: { strapi: any }) => ({
     const pd = form.publishedData || { fields: form.fields, settings: form.settings };
     const live = { fields: pd.fields || [], settings: pd.settings || {} };
 
+    const startDate = live.settings?.startDate;
+    if (startDate && new Date() < new Date(startDate)) {
+      const err: any = new Error('This form is not yet accepting responses.');
+      err.name = 'FormNotStartedError';
+      throw err;
+    }
+
+    const expiryDate = live.settings?.expiryDate;
+    if (expiryDate && new Date() >= new Date(expiryDate)) {
+      const err: any = new Error('This form has expired and is no longer accepting responses.');
+      err.name = 'FormExpiredError';
+      throw err;
+    }
+
     const validationService = strapi.plugin(PLUGIN_ID).service('validation');
     const result = validationService.validate(live.fields, body);
 
