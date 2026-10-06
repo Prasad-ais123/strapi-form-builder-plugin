@@ -39,6 +39,7 @@ export const FIELD_CATEGORIES: { cat: string; items: FieldMeta[] }[] = [
   ]},
   { cat: 'Choice', items: [
     { type: 'select', name: 'Select', cat: 'Choice' },
+    { type: 'state', name: 'States', cat: 'Choice' },
     { type: 'radio', name: 'Radio', cat: 'Choice' },
     { type: 'checkbox', name: 'Checkbox', cat: 'Choice' },
     { type: 'checkbox-group', name: 'Checkboxes', cat: 'Choice' },

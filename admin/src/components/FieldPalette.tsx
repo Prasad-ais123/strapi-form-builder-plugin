@@ -5,9 +5,10 @@ import { C, FF, FIELD_CATEGORIES, FieldIcon } from '../ui';
 
 interface Props {
   onAdd: (type: FieldType) => void;
+  disabledTypes?: FieldType[];
 }
 
-export function FieldPalette({ onAdd }: Props) {
+export function FieldPalette({ onAdd, disabledTypes = [] }: Props) {
   const [query, setQuery] = useState('');
   const [hover, setHover] = useState<FieldType | null>(null);
 
@@ -36,25 +37,29 @@ export function FieldPalette({ onAdd }: Props) {
           <div style={{ font: `700 10px ${FF}`, letterSpacing: '.5px', textTransform: 'uppercase', color: C.n500, margin: '14px 4px 8px' }}>{grp.cat}</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             {grp.items.map((item) => {
-              const on = hover === item.type;
+              const disabled = disabledTypes.includes(item.type);
+              const on = !disabled && hover === item.type;
               const full = item.type === 'divider';
               return (
                 <button
                   key={item.type}
                   type="button"
-                  onClick={() => onAdd(item.type)}
-                  onMouseEnter={() => setHover(item.type)}
+                  disabled={disabled}
+                  title={disabled ? 'Only one payment button is allowed per form' : undefined}
+                  onClick={() => !disabled && onAdd(item.type)}
+                  onMouseEnter={() => !disabled && setHover(item.type)}
                   onMouseLeave={() => setHover(null)}
                   style={{
                     gridColumn: full ? '1 / -1' : undefined,
                     display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 8, padding: 10,
                     border: `1px solid ${on ? C.p500 : C.n200}`, borderRadius: 6,
-                    background: on ? C.p100 : C.n0, cursor: 'pointer', textAlign: 'left',
-                    transition: 'border-color .1s, background .1s',
+                    background: on ? C.p100 : C.n0, cursor: disabled ? 'not-allowed' : 'pointer', textAlign: 'left',
+                    opacity: disabled ? 0.45 : 1,
+                    transition: 'border-color .1s, background .1s, opacity .1s',
                   }}
                 >
-                  <span style={{ color: on ? C.p600 : C.n600, display: 'inline-flex' }}><FieldIcon type={item.type} size={16} /></span>
-                  <span style={{ font: `500 12px ${FF}`, color: C.n800 }}>{item.name}</span>
+                  <span style={{ color: on ? C.p600 : disabled ? C.n400 : C.n600, display: 'inline-flex' }}><FieldIcon type={item.type} size={16} /></span>
+                  <span style={{ font: `500 12px ${FF}`, color: disabled ? C.n400 : C.n800 }}>{item.name}</span>
                 </button>
               );
             })}

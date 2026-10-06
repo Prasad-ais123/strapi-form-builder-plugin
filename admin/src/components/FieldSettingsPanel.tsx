@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Trash } from '@strapi/icons';
 import { FormField, FieldOption, ValidationRule, PaymentConfig } from '../types';
 import { C, FF, isDecorative, typeName } from '../ui';
+import { COUNTRIES, getStatesForCountry } from '../data/countriesStates';
 
 interface Props {
   field: FormField;
@@ -9,7 +10,7 @@ interface Props {
 }
 
 // Which settings apply to which field type (drives conditional visibility).
-const PLACEHOLDER_TYPES = ['text', 'email', 'number', 'phone', 'url', 'password', 'textarea', 'select'];
+const PLACEHOLDER_TYPES = ['text', 'email', 'number', 'phone', 'url', 'password', 'textarea', 'select', 'state'];
 
 const RULE_LABELS: Record<string, string> = {
   minLength: 'Min. length', maxLength: 'Max. length',
@@ -113,7 +114,7 @@ export function FieldSettingsPanel({ field, onChange }: Props) {
       },
     });
 
-  const hasOptions = ['select', 'radio', 'checkbox-group'].includes(field.type);
+  const hasOptions = ['select', 'radio', 'checkbox-group', 'state'].includes(field.type);
 
   const addOption = () => update({ options: [...(field.options || []), { label: '', value: '' }] });
   const updateOption = (i: number, patch: Partial<FieldOption>) =>
@@ -187,10 +188,30 @@ export function FieldSettingsPanel({ field, onChange }: Props) {
               <TextField label="Name (technical)" value={field.name} onChange={(v) => update({ name: v })} mono hint="Used as the key in submissions & the API payload." />
               {PLACEHOLDER_TYPES.includes(field.type) && (
                 <TextField
-                  label={field.type === 'select' ? 'Empty option text' : 'Placeholder'}
+                  label={['select', 'state'].includes(field.type) ? 'Empty option text' : 'Placeholder'}
                   value={field.placeholder || ''}
                   onChange={(v) => update({ placeholder: v })}
                 />
+              )}
+              {(field.type === 'state' || !!field.country) && (
+                <Labeled label="Country">
+                  <select
+                    className="sfb-inp"
+                    value={field.country || 'US'}
+                    onChange={(e) => {
+                      const c = e.target.value;
+                      update({
+                        country: c,
+                        options: getStatesForCountry(c),
+                      });
+                    }}
+                    style={{ ...inpStyle, cursor: 'pointer' }}
+                  >
+                    {COUNTRIES.map((c) => (
+                      <option key={c.code} value={c.code}>{c.name}</option>
+                    ))}
+                  </select>
+                </Labeled>
               )}
               {isPayment && (
                 <>
@@ -212,9 +233,6 @@ export function FieldSettingsPanel({ field, onChange }: Props) {
                       style={{ ...inpStyle, cursor: 'pointer' }}
                     >
                       <option value="USD">USD</option>
-                      <option value="EUR">EUR</option>
-                      <option value="GBP">GBP</option>
-                      <option value="INR">INR</option>
                     </select>
                   </Labeled>
                   <Labeled label="Amount">

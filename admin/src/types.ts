@@ -18,7 +18,8 @@ export type FieldType =
   | 'heading'
   | 'paragraph'
   | 'divider'
-  | 'payment';
+  | 'payment'
+  | 'state';
 
 export interface PaymentConfig {
   provider: 'paypal';
@@ -54,6 +55,7 @@ export interface FormField {
   validation: ValidationRule[];
   cssClass?: string;
   payment?: PaymentConfig;
+  country?: string;
 }
 
 export interface ConditionalRule {
@@ -75,7 +77,7 @@ export interface FormSettings {
   enableRateLimit: boolean;
   maxSubmissionsPerHour: number;
   notificationEmails: string[];
-  redirectUrl: string;
+  redirectUrl: string | null;
   customCss: string;
   publicPage: boolean;
   startDate?: string | null;
@@ -115,5 +117,10 @@ export interface FormSubmission {
   ipAddress?: string;
   userAgent?: string;
   status: 'new' | 'read' | 'archived';
+  paymentStatus?: string | null;
+  transactionId?: string | null;
+  amount?: number | null;
+  paymentCurrency?: string | null;
+  paymentProvider?: string | null;
   createdAt: string;
 }

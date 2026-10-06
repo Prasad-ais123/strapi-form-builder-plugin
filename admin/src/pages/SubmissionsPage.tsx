@@ -105,31 +105,77 @@ export function SubmissionsPage() {
   };
 
   const dataFields: FormField[] = (form?.fields || []).filter(
-    (f) => !['heading', 'paragraph', 'divider'].includes(f.type)
+    (f) => !['heading', 'paragraph', 'divider', 'payment'].includes(f.type)
   );
+
+  const getTxId = (sub: FormSubmission): string => {
+    let raw =
+      sub.transactionId ??
+      sub.data?.transactionId ??
+      sub.data?.transaction_id ??
+      sub.data?.orderId ??
+      sub.data?.order_id ??
+      sub.data?.paymentId ??
+      sub.data?.payment_id ??
+      sub.data?.payment ??
+      sub.data?.paypal_payment;
+    if (!raw) return '';
+    if (typeof raw === 'object') {
+      return raw.id || raw.orderId || raw.orderID || JSON.stringify(raw);
+    }
+    return String(raw);
+  };
+
+  const hasPayment = (form?.fields || []).some((f) => f.type === 'payment')
+    || submissions.some((s) => s.paymentStatus || s.transactionId || s.amount != null || s.paymentProvider || !!getTxId(s));
+
+  const paymentKeySet = new Set([
+    'paymentStatus', 'payment_status',
+    'transactionId', 'transaction_id',
+    'payment', 'paypal_payment',
+    'orderId', 'order_id',
+    'paymentId', 'payment_id',
+    'amount', 'paymentAmount', 'payment_amount',
+    'paymentCurrency', 'payment_currency', 'currency',
+    'paymentProvider', 'payment_provider',
+  ]);
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return submissions;
     return submissions.filter((s) =>
-      String(s.id).includes(q) || JSON.stringify(s.data || {}).toLowerCase().includes(q)
+      String(s.id).includes(q)
+      || getTxId(s).toLowerCase().includes(q)
+      || String(s.paymentStatus || '').toLowerCase().includes(q)
+      || JSON.stringify(s.data || {}).toLowerCase().includes(q)
     );
   }, [submissions, query]);
 
-  // Columns = current form fields + any keys still present in submissions (e.g. from
-  // fields that were later deleted), so no stored answer is hidden from the table.
+  // Columns = payment columns (if payment present) + current form fields + any keys still present in submissions
   const columns = useMemo(() => {
     const cols: { name: string; label: string }[] = [];
-    const seen = new Set<string>();
+    if (hasPayment) {
+      cols.push(
+        { name: 'paymentStatus', label: 'Payment Status' },
+        { name: 'transactionId', label: 'Transaction ID' },
+        { name: 'amount', label: 'Amount' },
+        { name: 'paymentCurrency', label: 'Currency' },
+        { name: 'paymentProvider', label: 'Provider' },
+      );
+    }
+    const seen = new Set<string>(cols.map((c) => c.name));
     for (const f of dataFields) { cols.push({ name: f.name, label: f.label }); seen.add(f.name); }
     for (const s of submissions) {
       const labelByName = new Map((s.fields || []).map((f) => [f.name, f.label] as const));
       for (const k of Object.keys(s.data || {})) {
-        if (!seen.has(k)) { seen.add(k); cols.push({ name: k, label: labelByName.get(k) || k }); }
+        if (!seen.has(k) && (!hasPayment || !paymentKeySet.has(k))) {
+          seen.add(k);
+          cols.push({ name: k, label: labelByName.get(k) || k });
+        }
       }
     }
     return cols;
-  }, [dataFields, submissions]);
+  }, [hasPayment, dataFields, submissions]);
 
   const shownColumns = columns.filter((c) => !hiddenCols.has(c.name));
 
@@ -323,8 +369,22 @@ export function SubmissionsPage() {
                     <Td><StatusBadge status={sub.status} /></Td>
                     <Td><Typography textColor="neutral600">{new Date(sub.createdAt).toLocaleString()}</Typography></Td>
                     {shownColumns.map((c) => {
-                      const raw = sub.data?.[c.name];
-                      const val = Array.isArray(raw) ? raw.join(', ') : String(raw ?? '');
+                      let val = '';
+                      if (c.name === 'paymentStatus') {
+                        val = String(sub.paymentStatus ?? (getTxId(sub) ? 'completed' : (sub.data?.payment_status ?? '')));
+                      } else if (c.name === 'transactionId') {
+                        val = getTxId(sub);
+                      } else if (c.name === 'amount') {
+                        const amt = sub.amount ?? sub.data?.amount ?? sub.data?.paymentAmount ?? sub.data?.payment_amount;
+                        val = amt != null && amt !== '' ? String(amt) : '';
+                      } else if (c.name === 'paymentCurrency') {
+                        val = String(sub.paymentCurrency ?? sub.data?.[c.name] ?? sub.data?.payment_currency ?? sub.data?.currency ?? '');
+                      } else if (c.name === 'paymentProvider') {
+                        val = String(sub.paymentProvider ?? sub.data?.[c.name] ?? sub.data?.payment_provider ?? '');
+                      } else {
+                        const raw = sub.data?.[c.name];
+                        val = Array.isArray(raw) ? raw.join(', ') : String(raw ?? '');
+                      }
                       return (
                         <Td key={c.name}>
                           <Typography style={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -371,6 +431,31 @@ export function SubmissionsPage() {
                   <div style={{ font: `600 12px ui-monospace, Menlo, monospace`, color: C.n700, marginTop: 6, wordBreak: 'break-all' }}>{selected.ipAddress || '—'}</div>
                 </div>
               </div>
+
+              {(() => {
+                const txId = selected ? getTxId(selected) : '';
+                if (!selected.paymentStatus && !txId && selected.amount == null && !selected.paymentProvider) {
+                  return null;
+                }
+                return (
+                  <div style={{ marginBottom: 20 }}>
+                    <div style={{ font: `600 12px ${FF}`, color: C.n700, marginBottom: 8 }}>Payment details</div>
+                    <div style={{ border: `1px solid ${C.n200}`, borderRadius: 6, overflow: 'hidden' }}>
+                      {[
+                        ['Status', selected.paymentStatus || (txId ? 'completed' : '')],
+                        ['Transaction ID', txId],
+                        ['Amount', selected.amount != null ? `${selected.paymentCurrency || 'USD'} ${selected.amount}` : (selected.data?.amount ? `${selected.paymentCurrency || 'USD'} ${selected.data.amount}` : null)],
+                        ['Provider', selected.paymentProvider || (txId ? 'paypal' : '')],
+                      ].filter(([, v]) => v != null && v !== '').map(([label, v], i) => (
+                        <div key={label} style={{ display: 'grid', gridTemplateColumns: '120px 1fr', columnGap: 16, padding: '10px 16px', background: i % 2 === 0 ? C.n0 : C.n100, alignItems: 'baseline' }}>
+                          <span style={{ font: `600 12px ${FF}`, color: C.n600 }}>{label}</span>
+                          <span style={{ font: `500 13px ${FF}`, color: C.n900 }}>{v}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
 
               <div style={{ font: `600 12px ${FF}`, color: C.n700, marginBottom: 8 }}>Submitted data</div>
               <div style={{ border: `1px solid ${C.n200}`, borderRadius: 6, overflow: 'hidden' }}>

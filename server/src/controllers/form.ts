@@ -346,6 +346,9 @@ function embedScript(): string {
     wrapper.className = 'sfb-field';
     if (field.cssClass) wrapper.className += ' ' + field.cssClass;
     wrapper.setAttribute('data-field-name', field.name);
+    if (field.validation && field.validation.length) {
+      wrapper.setAttribute('data-validation', JSON.stringify(field.validation));
+    }
     if (field.width !== 'half') wrapper.style.gridColumn = '1 / -1';
 
     if (field.type !== 'checkbox') {
@@ -378,16 +381,27 @@ function embedScript(): string {
   function buildInput(field) {
     var id = 'sfb-' + field.id;
 
+    function applyValidationAttrs(el, rules) {
+      (rules || []).forEach(function (rule) {
+        if (rule.type === 'min' && rule.value != null && rule.value !== '') el.min = rule.value;
+        if (rule.type === 'max' && rule.value != null && rule.value !== '') el.max = rule.value;
+        if (rule.type === 'minLength' && rule.value != null && rule.value !== '') el.minLength = Number(rule.value);
+        if (rule.type === 'maxLength' && rule.value != null && rule.value !== '') el.maxLength = Number(rule.value);
+        if (rule.type === 'pattern' && rule.value) el.pattern = rule.value;
+      });
+    }
+
     if (field.type === 'textarea') {
       var ta = document.createElement('textarea');
       ta.id = id; ta.name = field.name; ta.className = 'sfb-input';
       ta.placeholder = field.placeholder || '';
       ta.required = !!field.required;
       ta.rows = 4;
+      applyValidationAttrs(ta, field.validation);
       return ta;
     }
 
-    if (field.type === 'select') {
+    if (field.type === 'select' || field.type === 'state') {
       var sel = document.createElement('select');
       sel.id = id; sel.name = field.name; sel.className = 'sfb-input';
       sel.required = !!field.required;
@@ -475,6 +489,7 @@ function embedScript(): string {
     inp2.id = id; inp2.name = field.name; inp2.className = 'sfb-input';
     inp2.placeholder = field.placeholder || '';
     inp2.required = !!field.required;
+    applyValidationAttrs(inp2, field.validation);
     return inp2;
   }
 
@@ -558,11 +573,19 @@ export default {
   },
 
   async create(ctx: any) {
+    const fields = ctx.request.body?.fields;
+    if (Array.isArray(fields) && fields.filter((f: any) => f?.type === 'payment').length > 1) {
+      return ctx.badRequest('Only one payment button is allowed per form');
+    }
     const form = await strapi.plugin(PLUGIN_ID).service('form').create(ctx.request.body);
     ctx.body = form;
   },
 
   async update(ctx: any) {
+    const fields = ctx.request.body?.fields;
+    if (Array.isArray(fields) && fields.filter((f: any) => f?.type === 'payment').length > 1) {
+      return ctx.badRequest('Only one payment button is allowed per form');
+    }
     const { id } = ctx.params;
     const form = await strapi.plugin(PLUGIN_ID).service('form').update(Number(id), ctx.request.body);
     if (!form) return ctx.notFound('Form not found');

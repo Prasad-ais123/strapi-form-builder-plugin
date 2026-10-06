@@ -75,7 +75,7 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
 function PreviewInput({ field }: { field: FormField }) {
   const ph = field.placeholder || '';
   if (field.type === 'textarea') return <textarea className="sfb-input" placeholder={ph} readOnly />;
-  if (field.type === 'select') return (
+  if (field.type === 'select' || field.type === 'state') return (
     <select className="sfb-input"><option>{ph || 'Select an option…'}</option></select>
   );
   if (field.type === 'radio' || field.type === 'checkbox-group') return (

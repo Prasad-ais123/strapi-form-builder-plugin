@@ -16,6 +16,7 @@ import { GuidedTour, TourStep } from '../components/GuidedTour';
 import { PLUGIN_ID } from '../pluginId';
 import { C, FF } from '../ui';
 import { FormTheme, DEFAULT_THEME, resolveThemeVars } from '../theme';
+import { getStatesForCountry } from '../data/countriesStates';
 
 const DEFAULT_SETTINGS: FormSettings = {
   submitButtonText: 'Submit',
@@ -24,7 +25,7 @@ const DEFAULT_SETTINGS: FormSettings = {
   enableRateLimit: true,
   maxSubmissionsPerHour: 60,
   notificationEmails: [],
-  redirectUrl: '/',
+  redirectUrl: null,
   customCss: '',
   publicPage: false,
   startDate: null,
@@ -39,15 +40,37 @@ const DEFAULT_SETTINGS: FormSettings = {
 function stableStringify(v: any): string {
   if (Array.isArray(v)) return '[' + v.map(stableStringify).join(',') + ']';
   if (v && typeof v === 'object') {
-    return '{' + Object.keys(v).sort().map((k) => JSON.stringify(k) + ':' + stableStringify(v[k])).join(',') + '}';
+    return (
+      '{' +
+      Object.keys(v)
+        .sort()
+        .map((k) => JSON.stringify(k) + ':' + stableStringify(v[k]))
+        .join(',') +
+      '}'
+    );
   }
   return JSON.stringify(v ?? null);
 }
 const liveSnap = (o: { title: string; description: string; fields: any; settings: any }) =>
-  stableStringify({ title: o.title, description: o.description ?? '', fields: o.fields ?? [], settings: o.settings ?? {} });
+  stableStringify({
+    title: o.title,
+    description: o.description ?? '',
+    fields: o.fields ?? [],
+    settings: o.settings ?? {},
+  });
 
-function HeaderBtn({ variant, onClick, disabled, children, tour }: {
-  variant: 'ghost' | 'sec' | 'pri'; onClick: () => void; disabled?: boolean; children: React.ReactNode; tour?: string;
+function HeaderBtn({
+  variant,
+  onClick,
+  disabled,
+  children,
+  tour,
+}: {
+  variant: 'ghost' | 'sec' | 'pri';
+  onClick: () => void;
+  disabled?: boolean;
+  children: React.ReactNode;
+  tour?: string;
 }) {
   const styles: Record<string, React.CSSProperties> = {
     ghost: { background: C.n0, color: C.n800, border: `1px solid ${C.n200}` },
@@ -60,7 +83,18 @@ function HeaderBtn({ variant, onClick, disabled, children, tour }: {
       data-tour={tour}
       onClick={onClick}
       disabled={disabled}
-      style={{ height: 32, padding: '0 12px', borderRadius: 4, display: 'inline-flex', alignItems: 'center', font: `600 12px ${FF}`, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1, whiteSpace: 'nowrap', ...styles[variant] }}
+      style={{
+        height: 32,
+        padding: '0 12px',
+        borderRadius: 4,
+        display: 'inline-flex',
+        alignItems: 'center',
+        font: `600 12px ${FF}`,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.5 : 1,
+        whiteSpace: 'nowrap',
+        ...styles[variant],
+      }}
     >
       {children}
     </button>
@@ -69,23 +103,85 @@ function HeaderBtn({ variant, onClick, disabled, children, tour }: {
 
 function DrawerToggle({ on, onClick }: { on: boolean; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick} style={{ width: 40, height: 22, borderRadius: 20, background: on ? C.suc500 : C.n200, position: 'relative', flex: 'none', cursor: 'pointer', border: 'none', padding: 0 }}>
-      <span style={{ position: 'absolute', top: 2, left: on ? 20 : 2, width: 18, height: 18, borderRadius: '50%', background: '#fff', boxShadow: '0 1px 2px rgba(0,0,0,.2)', transition: 'left .15s' }} />
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        width: 40,
+        height: 22,
+        borderRadius: 20,
+        background: on ? C.suc500 : C.n200,
+        position: 'relative',
+        flex: 'none',
+        cursor: 'pointer',
+        border: 'none',
+        padding: 0,
+      }}
+    >
+      <span
+        style={{
+          position: 'absolute',
+          top: 2,
+          left: on ? 20 : 2,
+          width: 18,
+          height: 18,
+          borderRadius: '50%',
+          background: '#fff',
+          boxShadow: '0 1px 2px rgba(0,0,0,.2)',
+          transition: 'left .15s',
+        }}
+      />
     </button>
   );
 }
 
 const dInp: React.CSSProperties = {
-  height: 36, border: `1px solid ${C.n200}`, borderRadius: 4, background: C.n0,
-  padding: '0 11px', font: `400 13px ${FF}`, color: C.n800, width: '100%', outline: 'none',
+  height: 36,
+  border: `1px solid ${C.n200}`,
+  borderRadius: 4,
+  background: C.n0,
+  padding: '0 11px',
+  font: `400 13px ${FF}`,
+  color: C.n800,
+  width: '100%',
+  outline: 'none',
 };
-const dLbl: React.CSSProperties = { font: `600 12px ${FF}`, color: C.n700, display: 'block', marginBottom: 6 };
+const dLbl: React.CSSProperties = {
+  font: `600 12px ${FF}`,
+  color: C.n700,
+  display: 'block',
+  marginBottom: 6,
+};
 const dHint: React.CSSProperties = { font: `400 11px ${FF}`, color: C.n500, marginTop: 2 };
-const dGroupT: React.CSSProperties = { font: `700 11px ${FF}`, letterSpacing: '.5px', textTransform: 'uppercase', color: C.n500, marginBottom: 16 };
+const dGroupT: React.CSSProperties = {
+  font: `700 11px ${FF}`,
+  letterSpacing: '.5px',
+  textTransform: 'uppercase',
+  color: C.n500,
+  marginBottom: 16,
+};
 
-function ToggleRow({ label, hint, on, onClick }: { label: string; hint: string; on: boolean; onClick: () => void }) {
+function ToggleRow({
+  label,
+  hint,
+  on,
+  onClick,
+}: {
+  label: string;
+  hint: string;
+  on: boolean;
+  onClick: () => void;
+}) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 16 }}>
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 12,
+        marginTop: 16,
+      }}
+    >
       <div>
         <div style={{ font: `600 13px ${FF}`, color: C.n800 }}>{label}</div>
         <div style={dHint}>{hint}</div>
@@ -108,7 +204,16 @@ function toLocalDatetimeInput(isoString?: string | null): string {
   return `${year}-${month}-${day}T${hours}:${minutes}`;
 }
 
-function SettingsDrawer({ initialDescription, initialSettings, slug, publishedAt, onClose, onSave, onToggleStyle, onOpenStyle }: {
+function SettingsDrawer({
+  initialDescription,
+  initialSettings,
+  slug,
+  publishedAt,
+  onClose,
+  onSave,
+  onToggleStyle,
+  onOpenStyle,
+}: {
   initialDescription: string;
   initialSettings: FormSettings;
   slug: string | null;
@@ -156,30 +261,92 @@ function SettingsDrawer({ initialDescription, initialSettings, slug, publishedAt
 
   return (
     <>
-      <div onClick={onCancel} style={{ position: 'fixed', inset: 0, background: 'rgba(33,33,52,.32)', zIndex: 40 }} />
-      <div style={{ position: 'fixed', top: 0, right: 0, bottom: 0, width: 452, maxWidth: '100vw', background: C.n0, boxShadow: '-10px 0 50px rgba(33,33,52,.22)', display: 'flex', flexDirection: 'column', zIndex: 41 }}>
-        <div style={{ padding: '20px 24px', borderBottom: `1px solid ${C.n150}`, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+      <div
+        onClick={onCancel}
+        style={{ position: 'fixed', inset: 0, background: 'rgba(33,33,52,.32)', zIndex: 40 }}
+      />
+      <div
+        style={{
+          position: 'fixed',
+          top: 0,
+          right: 0,
+          bottom: 0,
+          width: 452,
+          maxWidth: '100vw',
+          background: C.n0,
+          boxShadow: '-10px 0 50px rgba(33,33,52,.22)',
+          display: 'flex',
+          flexDirection: 'column',
+          zIndex: 41,
+        }}
+      >
+        <div
+          style={{
+            padding: '20px 24px',
+            borderBottom: `1px solid ${C.n150}`,
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+          }}
+        >
           <div>
             <h3 style={{ font: `800 20px ${FF}`, color: C.n900, margin: 0 }}>Form settings</h3>
           </div>
-          <button type="button" onClick={onCancel} title="Close" style={{ width: 30, height: 30, borderRadius: 5, color: C.n500, border: 'none', background: 'none', cursor: 'pointer', fontSize: 15 }}>✕</button>
+          <button
+            type="button"
+            onClick={onCancel}
+            title="Close"
+            style={{
+              width: 30,
+              height: 30,
+              borderRadius: 5,
+              color: C.n500,
+              border: 'none',
+              background: 'none',
+              cursor: 'pointer',
+              fontSize: 15,
+            }}
+          >
+            ✕
+          </button>
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto', padding: '0 24px' }}>
           <div style={{ padding: '20px 0', borderBottom: `1px solid ${C.n150}` }}>
             <div style={dGroupT}>General</div>
             <label style={dLbl}>Description</label>
-            <textarea value={description} onChange={(e) => setDescription(e.target.value)} style={{ ...dInp, height: 'auto', minHeight: 62, padding: '10px 11px', lineHeight: 1.5, resize: 'vertical' }} />
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              style={{
+                ...dInp,
+                height: 'auto',
+                minHeight: 62,
+                padding: '10px 11px',
+                lineHeight: 1.5,
+                resize: 'vertical',
+              }}
+            />
             <div style={{ marginTop: 16 }}>
               <label style={dLbl}>Submit button text</label>
-              <input value={settings.submitButtonText} onChange={(e) => patch({ submitButtonText: e.target.value })} style={dInp} />
+              <input
+                value={settings.submitButtonText}
+                onChange={(e) => patch({ submitButtonText: e.target.value })}
+                style={dInp}
+              />
             </div>
             <div style={{ marginTop: 16 }}>
               <label style={dLbl}>Success message</label>
-              <input value={settings.successMessage} onChange={(e) => patch({ successMessage: e.target.value })} style={dInp} />
+              <input
+                value={settings.successMessage}
+                onChange={(e) => patch({ successMessage: e.target.value })}
+                style={dInp}
+              />
             </div>
             <div style={{ marginTop: 16 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+              >
                 <label style={dLbl}>Start date</label>
                 {settings.startDate && (
                   <button
@@ -221,7 +388,9 @@ function SettingsDrawer({ initialDescription, initialSettings, slug, publishedAt
               )}
             </div>
             <div style={{ marginTop: 16 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+              >
                 <label style={dLbl}>Expiry date</label>
                 {settings.expiryDate && (
                   <button
@@ -255,36 +424,89 @@ function SettingsDrawer({ initialDescription, initialSettings, slug, publishedAt
                 }}
                 style={{ ...dInp, cursor: 'pointer' }}
               />
-              <div style={dHint}>Optional. Submissions will be closed after this date and time.</div>
+              <div style={dHint}>
+                Optional. Submissions will be closed after this date and time.
+              </div>
               {settings.expiryDate && new Date(settings.expiryDate).getTime() <= Date.now() && (
                 <div style={{ ...dHint, color: C.wrn700, marginTop: 4 }}>
-                  ⚠ This date is in the past — the form is currently expired and will not accept submissions.
+                  ⚠ This date is in the past — the form is currently expired and will not accept
+                  submissions.
                 </div>
               )}
-              {settings.startDate && settings.expiryDate && new Date(settings.startDate).getTime() > new Date(settings.expiryDate).getTime() && (
-                <div style={{ ...dHint, color: C.dng600, marginTop: 4 }}>
-                  ⚠ Start date is after expiry date. Form will remain closed.
-                </div>
-              )}
+              {settings.startDate &&
+                settings.expiryDate &&
+                new Date(settings.startDate).getTime() >
+                  new Date(settings.expiryDate).getTime() && (
+                  <div style={{ ...dHint, color: C.dng600, marginTop: 4 }}>
+                    ⚠ Start date is after expiry date. Form will remain closed.
+                  </div>
+                )}
             </div>
           </div>
 
           <div style={{ padding: '20px 0', borderBottom: `1px solid ${C.n150}` }}>
             <div style={dGroupT}>Public access</div>
             <div data-tour="publicpage">
-              <ToggleRow label="Public page" hint="Generate a shareable live link." on={settings.publicPage} onClick={() => patch({ publicPage: !settings.publicPage })} />
+              <ToggleRow
+                label="Public page"
+                hint="Generate a shareable live link."
+                on={settings.publicPage}
+                onClick={() => patch({ publicPage: !settings.publicPage })}
+              />
             </div>
             {settings.publicPage && (
               <div style={{ marginTop: 14 }}>
                 {slug ? (
                   <>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: live ? '#eafbe7' : C.wrn100, border: `1px solid ${live ? '#c6f0c2' : '#f2d9a6'}`, borderRadius: 4, padding: '8px 10px', font: `500 12px ui-monospace, Menlo, monospace`, color: live ? C.suc700 : C.wrn700 }}>
-                      <span style={{ width: 7, height: 7, borderRadius: '50%', background: live ? C.suc600 : C.wrn600, flex: 'none' }} />
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{url}</span>
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        background: live ? '#eafbe7' : C.wrn100,
+                        border: `1px solid ${live ? '#c6f0c2' : '#f2d9a6'}`,
+                        borderRadius: 4,
+                        padding: '8px 10px',
+                        font: `500 12px ui-monospace, Menlo, monospace`,
+                        color: live ? C.suc700 : C.wrn700,
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: 7,
+                          height: 7,
+                          borderRadius: '50%',
+                          background: live ? C.suc600 : C.wrn600,
+                          flex: 'none',
+                        }}
+                      />
+                      <span
+                        style={{
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {url}
+                      </span>
                     </div>
-                    <div style={{ ...dHint, marginTop: 6, display: 'flex', justifyContent: 'space-between' }}>
+                    <div
+                      style={{
+                        ...dHint,
+                        marginTop: 6,
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                      }}
+                    >
                       <span>{live ? 'Live now.' : '⚠ Inactive until a version is published.'}</span>
-                      <a href={url} target="_blank" rel="noopener noreferrer" style={{ color: C.p600, fontWeight: 600, textDecoration: 'none' }}>Open ↗</a>
+                      <a
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ color: C.p600, fontWeight: 600, textDecoration: 'none' }}
+                      >
+                        Open ↗
+                      </a>
                     </div>
                   </>
                 ) : (
@@ -297,26 +519,66 @@ function SettingsDrawer({ initialDescription, initialSettings, slug, publishedAt
           <div style={{ padding: '20px 0', borderBottom: `1px solid ${C.n150}` }}>
             <div style={dGroupT}>Style</div>
             <div data-tour="customstyles">
-              <ToggleRow label="Custom styles" hint="Enable the Style editor to theme the public form." on={!!settings.enableStyle} onClick={() => { const v = !settings.enableStyle; patch({ enableStyle: v }); onToggleStyle(v); }} />
+              <ToggleRow
+                label="Custom styles"
+                hint="Enable the Style editor to theme the public form."
+                on={!!settings.enableStyle}
+                onClick={() => {
+                  const v = !settings.enableStyle;
+                  patch({ enableStyle: v });
+                  onToggleStyle(v);
+                }}
+              />
             </div>
             {settings.enableStyle && (
               <div style={{ marginTop: 12 }}>
-                <button type="button" onClick={onOpenStyle} style={{ font: `600 12px ${FF}`, color: C.p600, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
+                <button
+                  type="button"
+                  onClick={onOpenStyle}
+                  style={{
+                    font: `600 12px ${FF}`,
+                    color: C.p600,
+                    background: 'none',
+                    border: 'none',
+                    padding: 0,
+                    cursor: 'pointer',
+                  }}
+                >
                   Open the style editor →
                 </button>
-                <div style={{ ...dHint, marginTop: 6 }}>Style changes follow draft / publish — they go live when you publish.</div>
+                <div style={{ ...dHint, marginTop: 6 }}>
+                  Style changes follow draft / publish — they go live when you publish.
+                </div>
               </div>
             )}
           </div>
 
           <div style={{ padding: '20px 0', borderBottom: `1px solid ${C.n150}` }}>
             <div style={dGroupT}>Spam &amp; limits</div>
-            <ToggleRow label="Honeypot protection" hint="Silently discards bot submissions." on={settings.enableHoneypot} onClick={() => patch({ enableHoneypot: !settings.enableHoneypot })} />
-            <ToggleRow label="Rate limiting" hint="Cap submissions per IP each hour." on={settings.enableRateLimit} onClick={() => patch({ enableRateLimit: !settings.enableRateLimit })} />
+            <ToggleRow
+              label="Honeypot protection"
+              hint="Silently discards bot submissions."
+              on={settings.enableHoneypot}
+              onClick={() => patch({ enableHoneypot: !settings.enableHoneypot })}
+            />
+            <ToggleRow
+              label="Rate limiting"
+              hint="Cap submissions per IP each hour."
+              on={settings.enableRateLimit}
+              onClick={() => patch({ enableRateLimit: !settings.enableRateLimit })}
+            />
             {settings.enableRateLimit && (
               <div style={{ marginTop: 16 }}>
                 <label style={dLbl}>Max submissions / hour</label>
-                <input value={String(settings.maxSubmissionsPerHour ?? '')} onChange={(e) => patch({ maxSubmissionsPerHour: Number(e.target.value.replace(/[^0-9]/g, '')) || 0 })} style={{ ...dInp, width: 120 }} />
+                <input
+                  value={String(settings.maxSubmissionsPerHour ?? '')}
+                  onChange={(e) =>
+                    patch({
+                      maxSubmissionsPerHour: Number(e.target.value.replace(/[^0-9]/g, '')) || 0,
+                    })
+                  }
+                  style={{ ...dInp, width: 120 }}
+                />
               </div>
             )}
 
@@ -324,39 +586,85 @@ function SettingsDrawer({ initialDescription, initialSettings, slug, publishedAt
               <label style={dLbl}>CAPTCHA</label>
               <select
                 value={settings.captcha?.provider || 'none'}
-                onChange={(e) => { setCaptchaErr(''); patch({ captcha: { provider: e.target.value as any, siteKey: '', secretKey: '' } }); }}
+                onChange={(e) => {
+                  setCaptchaErr('');
+                  patch({
+                    captcha: { provider: e.target.value as any, siteKey: '', secretKey: '' },
+                  });
+                }}
                 style={{ ...dInp, cursor: 'pointer' }}
               >
                 <option value="none">None</option>
                 <option value="turnstile">Cloudflare Turnstile</option>
                 <option value="recaptcha">Google reCAPTCHA v2</option>
               </select>
-              <div style={dHint}>Human-verification challenge required before a submission is accepted.</div>
+              <div style={dHint}>
+                Human-verification challenge required before a submission is accepted.
+              </div>
             </div>
             {settings.captcha && settings.captcha.provider !== 'none' && (
               <>
                 <div style={{ marginTop: 12 }}>
                   <label style={dLbl}>Site key</label>
-                  <input value={settings.captcha.siteKey} onChange={(e) => patch({ captcha: { ...settings.captcha!, siteKey: e.target.value } })} placeholder="Public — sent to the browser" style={{ ...dInp, fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 12 }} />
+                  <input
+                    value={settings.captcha.siteKey}
+                    onChange={(e) =>
+                      patch({ captcha: { ...settings.captcha!, siteKey: e.target.value } })
+                    }
+                    placeholder="Public — sent to the browser"
+                    style={{ ...dInp, fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 12 }}
+                  />
                 </div>
                 <div style={{ marginTop: 12 }}>
                   <label style={dLbl}>Secret key</label>
-                  <input type="password" value={settings.captcha.secretKey} onChange={(e) => { setTestResult(null); patch({ captcha: { ...settings.captcha!, secretKey: e.target.value } }); }} placeholder="Private — kept server-side, never exposed" style={{ ...dInp, fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 12 }} />
+                  <input
+                    type="password"
+                    value={settings.captcha.secretKey}
+                    onChange={(e) => {
+                      setTestResult(null);
+                      patch({ captcha: { ...settings.captcha!, secretKey: e.target.value } });
+                    }}
+                    placeholder="Private — kept server-side, never exposed"
+                    style={{ ...dInp, fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 12 }}
+                  />
                 </div>
                 <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <button type="button" onClick={testCaptcha} disabled={testing || !settings.captcha.secretKey.trim()} style={{ height: 30, padding: '0 12px', borderRadius: 4, border: `1px solid ${C.n200}`, background: C.n0, color: C.n800, font: `600 12px ${FF}`, cursor: testing || !settings.captcha.secretKey.trim() ? 'not-allowed' : 'pointer', opacity: testing || !settings.captcha.secretKey.trim() ? 0.5 : 1 }}>
+                  <button
+                    type="button"
+                    onClick={testCaptcha}
+                    disabled={testing || !settings.captcha.secretKey.trim()}
+                    style={{
+                      height: 30,
+                      padding: '0 12px',
+                      borderRadius: 4,
+                      border: `1px solid ${C.n200}`,
+                      background: C.n0,
+                      color: C.n800,
+                      font: `600 12px ${FF}`,
+                      cursor:
+                        testing || !settings.captcha.secretKey.trim() ? 'not-allowed' : 'pointer',
+                      opacity: testing || !settings.captcha.secretKey.trim() ? 0.5 : 1,
+                    }}
+                  >
                     {testing ? 'Testing…' : 'Test secret key'}
                   </button>
                   {testResult && (
-                    <span style={{ font: `600 12px ${FF}`, color: testResult.ok ? C.suc600 : C.dng600 }}>
+                    <span
+                      style={{ font: `600 12px ${FF}`, color: testResult.ok ? C.suc600 : C.dng600 }}
+                    >
                       {testResult.ok ? '✓ Secret key valid' : `✗ ${testResult.reason || 'Invalid'}`}
                     </span>
                   )}
                 </div>
                 <div style={{ ...dHint, marginTop: 6 }}>
-                  Note: the site key can only be checked on the live form — an invalid site key shows no widget there.
+                  Note: the site key can only be checked on the live form — an invalid site key
+                  shows no widget there.
                 </div>
-                {captchaErr && <div style={{ marginTop: 10, font: `500 12px ${FF}`, color: C.dng600 }}>{captchaErr}</div>}
+                {captchaErr && (
+                  <div style={{ marginTop: 10, font: `500 12px ${FF}`, color: C.dng600 }}>
+                    {captchaErr}
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -364,13 +672,30 @@ function SettingsDrawer({ initialDescription, initialSettings, slug, publishedAt
           <div style={{ padding: '20px 0' }}>
             <div style={dGroupT}>Advanced</div>
             <label style={dLbl}>Redirect URL after submit</label>
-            <input value={settings.redirectUrl} onChange={(e) => patch({ redirectUrl: e.target.value })} placeholder="https://acme.co/thank-you" style={{ ...dInp, fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 12 }} />
+            <input
+              value={settings.redirectUrl || ''}
+              onChange={(e) => patch({ redirectUrl: e.target.value || null })}
+              placeholder="https://acme.co/thank-you"
+              style={{ ...dInp, fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 12 }}
+            />
           </div>
         </div>
 
-        <div style={{ padding: '16px 24px', borderTop: `1px solid ${C.n150}`, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <HeaderBtn variant="ghost" onClick={onCancel}>Cancel</HeaderBtn>
-          <HeaderBtn variant="pri" onClick={handleSave}>Save settings</HeaderBtn>
+        <div
+          style={{
+            padding: '16px 24px',
+            borderTop: `1px solid ${C.n150}`,
+            display: 'flex',
+            justifyContent: 'flex-end',
+            gap: 8,
+          }}
+        >
+          <HeaderBtn variant="ghost" onClick={onCancel}>
+            Cancel
+          </HeaderBtn>
+          <HeaderBtn variant="pri" onClick={handleSave}>
+            Save settings
+          </HeaderBtn>
         </div>
       </div>
     </>
@@ -379,20 +704,24 @@ function SettingsDrawer({ initialDescription, initialSettings, slug, publishedAt
 
 function createField(type: FieldType, order: number): FormField {
   const id = uuid();
+  const isState = type === 'state';
   return {
     id,
-    type,
+    type: isState ? 'select' : type,
     // unique per-field name derived from the uuid — Date.now() collided for fields added in the same ms
-    name: `${type}_${id.slice(0, 8)}`,
-    label: type.charAt(0).toUpperCase() + type.slice(1),
-    placeholder: '',
+    name: `${isState ? 'state' : type}_${id.slice(0, 8)}`,
+    label: isState ? 'State' : type.charAt(0).toUpperCase() + type.slice(1),
+    placeholder: isState ? 'Select a state…' : '',
     helpText: '',
     required: type === 'payment',
     order,
     width: 'full',
-    options: ['select', 'radio', 'checkbox-group'].includes(type)
-      ? [{ label: 'Option 1', value: 'option_1' }]
-      : undefined,
+    country: isState ? 'US' : undefined,
+    options: isState
+      ? getStatesForCountry('US')
+      : ['select', 'radio', 'checkbox-group'].includes(type)
+        ? [{ label: 'Option 1', value: 'option_1' }]
+        : undefined,
     validation: [],
     payment:
       type === 'payment'
@@ -437,7 +766,9 @@ export function FormBuilderPage() {
   // dirty tracking: compare live state against the last saved/loaded snapshot
   const savedRef = useRef<string>('');
   const snapshot = () => JSON.stringify({ title, description, fields, settings });
-  const markSaved = () => { savedRef.current = snapshot(); };
+  const markSaved = () => {
+    savedRef.current = snapshot();
+  };
 
   useEffect(() => {
     if (!isNew && id) {
@@ -486,7 +817,10 @@ export function FormBuilderPage() {
 
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
-      if (dirty) { e.preventDefault(); e.returnValue = ''; }
+      if (dirty) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
     };
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);
@@ -497,11 +831,23 @@ export function FormBuilderPage() {
     navigate(`/plugins/${PLUGIN_ID}`);
   };
 
-  const addField = useCallback((type: FieldType) => {
-    const newField = createField(type, fields.length);
-    setFields((prev) => [...prev, newField]);
-    setSelectedFieldId(newField.id);
-  }, [fields.length]);
+  const hasPayment = fields.some((f) => f.type === 'payment');
+
+  const addField = useCallback(
+    (type: FieldType) => {
+      if (type === 'payment' && fields.some((f) => f.type === 'payment')) {
+        toggleNotification({
+          type: 'warning',
+          message: 'Only one payment button is allowed per form.',
+        });
+        return;
+      }
+      const newField = createField(type, fields.length);
+      setFields((prev) => [...prev, newField]);
+      setSelectedFieldId(newField.id);
+    },
+    [fields, toggleNotification]
+  );
 
   const updateField = useCallback((updated: FormField) => {
     setFields((prev) => prev.map((f) => (f.id === updated.id ? updated : f)));
@@ -519,7 +865,14 @@ export function FormBuilderPage() {
   const saveDraft = async () => {
     setSaving(true);
     try {
-      const payload = { title, description, fields, settings, conditionalLogic: [], publishedAt: null };
+      const payload = {
+        title,
+        description,
+        fields,
+        settings,
+        conditionalLogic: [],
+        publishedAt: null,
+      };
       if (isNew) {
         const created = await api.createForm(payload);
         setPublishedAt(null);
@@ -531,7 +884,10 @@ export function FormBuilderPage() {
         setPublishedAt(updated.publishedAt ?? null);
         markSaved();
       }
-      toggleNotification({ type: 'info', message: 'Saved as draft. Publish to make your changes — including styles — live.' });
+      toggleNotification({
+        type: 'info',
+        message: 'Saved as draft. Publish to make your changes — including styles — live.',
+      });
     } finally {
       setSaving(false);
     }
@@ -541,7 +897,14 @@ export function FormBuilderPage() {
     setPublishing(true);
     try {
       const now = new Date().toISOString();
-      const payload = { title, description, fields, settings, conditionalLogic: [], publishedAt: now };
+      const payload = {
+        title,
+        description,
+        fields,
+        settings,
+        conditionalLogic: [],
+        publishedAt: now,
+      };
       // working copy is now the live snapshot → clears the "unpublished changes" indicator
       const snap = { title, description, fields, settings, conditionalLogic: [] };
       if (isNew) {
@@ -557,7 +920,10 @@ export function FormBuilderPage() {
         setPublishedData(updated.publishedData ?? snap);
         markSaved();
       }
-      toggleNotification({ type: 'success', message: 'Published. Your form and styles are now live.' });
+      toggleNotification({
+        type: 'success',
+        message: 'Published. Your form and styles are now live.',
+      });
     } finally {
       setPublishing(false);
     }
@@ -568,22 +934,76 @@ export function FormBuilderPage() {
   // guided tour — auto-runs once per browser, re-launchable from the "?" button
   const TOUR_KEY = 'sfb-tour-done';
   const tourSteps: TourStep[] = [
-    { selector: '[data-tour="palette"]', title: 'Field palette', body: 'Click any field type to add it to your form. Use search to filter the list.' },
-    { selector: '[data-tour="canvas"]', title: 'Build your form', body: 'Fields land here. Click one to edit its label, validation and width; drag the handle to reorder.' },
-    { selector: '[data-tour="settings"]', title: 'Settings', body: 'Public page, spam protection, CAPTCHA and custom styles live in this drawer.' },
-    { selector: '[data-tour="publicpage"]', title: 'Public page', body: 'Turn this on to generate a shareable hosted page for the form (live once published).', panel: 'settings' },
-    { selector: '[data-tour="customstyles"]', title: 'Custom styles', body: 'Enable this to unlock the visual Style editor for theming the public form.', panel: 'settings' },
-    ...(settings.enableStyle ? [{ selector: '[data-tour="styletab"]', title: 'Style', body: 'Theme the public form visually — colours, fonts, corners and layout — with a live preview.' }] : []),
-    { selector: '[data-tour="preview"]', title: 'Preview', body: 'See the rendered form before you publish it.' },
-    { selector: '[data-tour="embed"]', title: 'Embed', body: 'Once the form is saved, grab the snippet here to drop it onto any website.' },
-    { selector: '[data-tour="publish"]', title: 'Publish', body: 'Save a draft privately, or publish to push your changes — fields and styles — live.' },
+    {
+      selector: '[data-tour="palette"]',
+      title: 'Field palette',
+      body: 'Click any field type to add it to your form. Use search to filter the list.',
+    },
+    {
+      selector: '[data-tour="canvas"]',
+      title: 'Build your form',
+      body: 'Fields land here. Click one to edit its label, validation and width; drag the handle to reorder.',
+    },
+    {
+      selector: '[data-tour="settings"]',
+      title: 'Settings',
+      body: 'Public page, spam protection, CAPTCHA and custom styles live in this drawer.',
+    },
+    {
+      selector: '[data-tour="publicpage"]',
+      title: 'Public page',
+      body: 'Turn this on to generate a shareable hosted page for the form (live once published).',
+      panel: 'settings',
+    },
+    {
+      selector: '[data-tour="customstyles"]',
+      title: 'Custom styles',
+      body: 'Enable this to unlock the visual Style editor for theming the public form.',
+      panel: 'settings',
+    },
+    ...(settings.enableStyle
+      ? [
+          {
+            selector: '[data-tour="styletab"]',
+            title: 'Style',
+            body: 'Theme the public form visually — colours, fonts, corners and layout — with a live preview.',
+          },
+        ]
+      : []),
+    {
+      selector: '[data-tour="preview"]',
+      title: 'Preview',
+      body: 'See the rendered form before you publish it.',
+    },
+    {
+      selector: '[data-tour="embed"]',
+      title: 'Embed',
+      body: 'Once the form is saved, grab the snippet here to drop it onto any website.',
+    },
+    {
+      selector: '[data-tour="publish"]',
+      title: 'Publish',
+      body: 'Save a draft privately, or publish to push your changes — fields and styles — live.',
+    },
   ];
   const startTour = () => setShowTour(true);
-  const endTour = () => { setShowTour(false); setShowSettings(false); try { localStorage.setItem(TOUR_KEY, '1'); } catch { /* ignore */ } };
+  const endTour = () => {
+    setShowTour(false);
+    setShowSettings(false);
+    try {
+      localStorage.setItem(TOUR_KEY, '1');
+    } catch {
+      /* ignore */
+    }
+  };
 
   useEffect(() => {
     if (loading) return;
-    try { if (!localStorage.getItem(TOUR_KEY)) setShowTour(true); } catch { /* ignore */ }
+    try {
+      if (!localStorage.getItem(TOUR_KEY)) setShowTour(true);
+    } catch {
+      /* ignore */
+    }
   }, [loading]);
 
   if (loading) {
@@ -597,9 +1017,36 @@ export function FormBuilderPage() {
   return (
     <Box style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
       {/* Header */}
-      <div style={{ background: C.n0, borderBottom: `1px solid ${C.n150}`, padding: '12px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+      <div
+        style={{
+          background: C.n0,
+          borderBottom: `1px solid ${C.n150}`,
+          padding: '12px 24px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 16,
+        }}
+      >
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0 }}>
-          <button type="button" onClick={goBack} title="Back" style={{ width: 34, height: 34, borderRadius: 4, border: `1px solid ${C.n200}`, background: C.n0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.n600, flex: 'none', cursor: 'pointer' }}>
+          <button
+            type="button"
+            onClick={goBack}
+            title="Back"
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: 4,
+              border: `1px solid ${C.n200}`,
+              background: C.n0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: C.n600,
+              flex: 'none',
+              cursor: 'pointer',
+            }}
+          >
             <ArrowLeft width="16px" height="16px" fill="currentColor" />
           </button>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
@@ -610,13 +1057,37 @@ export function FormBuilderPage() {
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   onBlur={() => setEditingTitle(false)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') setEditingTitle(false); }}
-                  style={{ font: `700 18px ${FF}`, color: C.n900, border: `1px solid ${C.p500}`, borderRadius: 4, padding: '1px 6px', outline: 'none', width: 220 }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') setEditingTitle(false);
+                  }}
+                  style={{
+                    font: `700 18px ${FF}`,
+                    color: C.n900,
+                    border: `1px solid ${C.p500}`,
+                    borderRadius: 4,
+                    padding: '1px 6px',
+                    outline: 'none',
+                    width: 220,
+                  }}
                 />
               ) : (
                 <>
-                  <b style={{ font: `700 18px ${FF}`, color: C.n900, whiteSpace: 'nowrap' }}>{title}</b>
-                  <button type="button" onClick={() => setEditingTitle(true)} title="Rename" style={{ display: 'inline-flex', color: C.n400, border: 'none', background: 'none', cursor: 'pointer', padding: 0 }}>
+                  <b style={{ font: `700 18px ${FF}`, color: C.n900, whiteSpace: 'nowrap' }}>
+                    {title}
+                  </b>
+                  <button
+                    type="button"
+                    onClick={() => setEditingTitle(true)}
+                    title="Rename"
+                    style={{
+                      display: 'inline-flex',
+                      color: C.n400,
+                      border: 'none',
+                      background: 'none',
+                      cursor: 'pointer',
+                      padding: 0,
+                    }}
+                  >
                     <Pencil width="13px" height="13px" fill="currentColor" />
                   </button>
                 </>
@@ -626,16 +1097,58 @@ export function FormBuilderPage() {
               {fields.length} {fields.length === 1 ? 'field' : 'fields'}
             </div>
           </div>
-          <span title={hasUnpublishedChanges ? "Your edits aren't live yet — Publish to update the public form" : undefined} style={{ height: 24, padding: '0 9px', borderRadius: 4, display: 'inline-flex', alignItems: 'center', gap: 6, font: `700 11px ${FF}`, letterSpacing: '.3px', textTransform: 'uppercase', background: status.bg, color: status.fg }}>
+          <span
+            title={
+              hasUnpublishedChanges
+                ? "Your edits aren't live yet — Publish to update the public form"
+                : undefined
+            }
+            style={{
+              height: 24,
+              padding: '0 9px',
+              borderRadius: 4,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              font: `700 11px ${FF}`,
+              letterSpacing: '.3px',
+              textTransform: 'uppercase',
+              background: status.bg,
+              color: status.fg,
+            }}
+          >
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: status.dot }} />
             {status.label}
           </span>
         </div>
         {settings.enableStyle && (
-          <div data-tour="styletab" style={{ display: 'flex', border: `1px solid ${C.n200}`, borderRadius: 8, overflow: 'hidden', flex: 'none' }}>
+          <div
+            data-tour="styletab"
+            style={{
+              display: 'flex',
+              border: `1px solid ${C.n200}`,
+              borderRadius: 8,
+              overflow: 'hidden',
+              flex: 'none',
+            }}
+          >
             {(['fields', 'style'] as const).map((m, i) => (
-              <button key={m} type="button" onClick={() => setMode(m)}
-                style={{ height: 34, padding: '0 18px', border: 'none', borderLeft: i ? `1px solid ${C.n200}` : 'none', background: mode === m ? C.p600 : C.n0, color: mode === m ? '#fff' : C.n700, font: `600 13px ${FF}`, cursor: 'pointer', textTransform: 'capitalize' }}>
+              <button
+                key={m}
+                type="button"
+                onClick={() => setMode(m)}
+                style={{
+                  height: 34,
+                  padding: '0 18px',
+                  border: 'none',
+                  borderLeft: i ? `1px solid ${C.n200}` : 'none',
+                  background: mode === m ? C.p600 : C.n0,
+                  color: mode === m ? '#fff' : C.n700,
+                  font: `600 13px ${FF}`,
+                  cursor: 'pointer',
+                  textTransform: 'capitalize',
+                }}
+              >
                 {m}
               </button>
             ))}
@@ -643,16 +1156,59 @@ export function FormBuilderPage() {
         )}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {showLiveLink && (
-            <a href={liveUrl} target="_blank" rel="noopener noreferrer" title="Open the live public form" style={{ font: `600 12px ${FF}`, color: C.p600, textDecoration: 'none', marginRight: 4 }}>
+            <a
+              href={liveUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Open the live public form"
+              style={{
+                font: `600 12px ${FF}`,
+                color: C.p600,
+                textDecoration: 'none',
+                marginRight: 4,
+              }}
+            >
               View live ↗
             </a>
           )}
-          <button type="button" onClick={startTour} title="Take a tour" style={{ width: 32, height: 32, borderRadius: 6, border: `1px solid ${C.n200}`, background: C.n0, color: C.n600, font: `700 14px ${FF}`, cursor: 'pointer', flex: 'none' }}>?</button>
-          <HeaderBtn variant="ghost" tour="settings" onClick={() => setShowSettings((v) => !v)}>Settings</HeaderBtn>
-          <HeaderBtn variant="ghost" tour="preview" onClick={() => setShowPreview(true)}>Preview</HeaderBtn>
-          <HeaderBtn variant="ghost" tour="embed" disabled={isNew} onClick={() => setShowEmbed(true)}>Embed</HeaderBtn>
-          <HeaderBtn variant="sec" onClick={saveDraft} disabled={saving}>Save draft</HeaderBtn>
-          <HeaderBtn variant="pri" tour="publish" onClick={publish} disabled={publishing}>Publish</HeaderBtn>
+          <button
+            type="button"
+            onClick={startTour}
+            title="Take a tour"
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 6,
+              border: `1px solid ${C.n200}`,
+              background: C.n0,
+              color: C.n600,
+              font: `700 14px ${FF}`,
+              cursor: 'pointer',
+              flex: 'none',
+            }}
+          >
+            ?
+          </button>
+          <HeaderBtn variant="ghost" tour="settings" onClick={() => setShowSettings((v) => !v)}>
+            Settings
+          </HeaderBtn>
+          <HeaderBtn variant="ghost" tour="preview" onClick={() => setShowPreview(true)}>
+            Preview
+          </HeaderBtn>
+          <HeaderBtn
+            variant="ghost"
+            tour="embed"
+            disabled={isNew}
+            onClick={() => setShowEmbed(true)}
+          >
+            Embed
+          </HeaderBtn>
+          <HeaderBtn variant="sec" onClick={saveDraft} disabled={saving}>
+            Save draft
+          </HeaderBtn>
+          <HeaderBtn variant="pri" tour="publish" onClick={publish} disabled={publishing}>
+            Publish
+          </HeaderBtn>
         </div>
       </div>
 
@@ -664,58 +1220,107 @@ export function FormBuilderPage() {
           slug={slug}
           publishedAt={publishedAt}
           onClose={() => setShowSettings(false)}
-          onSave={(desc, s) => { setDescription(desc); setSettings(s); setShowSettings(false); }}
+          onSave={(desc, s) => {
+            setDescription(desc);
+            setSettings(s);
+            setShowSettings(false);
+          }}
           onToggleStyle={(v) => setSettings((s) => ({ ...s, enableStyle: v }))}
-          onOpenStyle={() => { setShowSettings(false); setMode('style'); }}
+          onOpenStyle={() => {
+            setShowSettings(false);
+            setMode('style');
+          }}
         />
       )}
 
       {/* Main area */}
       {mode === 'fields' || !settings.enableStyle ? (
-      <Flex style={{ flex: 1, minHeight: 0 }}>
-        <FieldPalette onAdd={addField} />
+        <Flex style={{ flex: 1, minHeight: 0 }}>
+          <FieldPalette onAdd={addField} disabledTypes={hasPayment ? ['payment'] : []} />
 
-        <div style={{ flex: 1, overflowY: 'auto', minWidth: 0, alignSelf: 'stretch', background: C.n100, padding: '28px 32px 60px', display: 'flex', justifyContent: 'center' }}>
-          <div data-tour="canvas" style={{ width: '100%', maxWidth: 860 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-              <b style={{ font: `700 15px ${FF}`, color: C.n900 }}>Fields</b>
-              <span style={{ font: `400 11px ${FF}`, color: C.n500 }}>
-                {fields.length} {fields.length === 1 ? 'field' : 'fields'}{fields.length > 0 ? ' · drag to reorder' : ''}
-              </span>
-            </div>
-
-            {fields.length === 0 ? (
-              <div style={{ background: C.n0, border: `1.5px dashed ${C.n300}`, borderRadius: 8, padding: '56px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, textAlign: 'center' }}>
-                <b style={{ font: `700 15px ${FF}`, color: C.n900 }}>No fields yet</b>
-                <span style={{ font: `400 13px ${FF}`, color: C.n500 }}>Click a field type in the palette to add it here.</span>
+          <div
+            style={{
+              flex: 1,
+              overflowY: 'auto',
+              minWidth: 0,
+              alignSelf: 'stretch',
+              background: C.n100,
+              padding: '28px 32px 60px',
+              display: 'flex',
+              justifyContent: 'center',
+            }}
+          >
+            <div data-tour="canvas" style={{ width: '100%', maxWidth: 860 }}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: 16,
+                }}
+              >
+                <b style={{ font: `700 15px ${FF}`, color: C.n900 }}>Fields</b>
+                <span style={{ font: `400 11px ${FF}`, color: C.n500 }}>
+                  {fields.length} {fields.length === 1 ? 'field' : 'fields'}
+                  {fields.length > 0 ? ' · drag to reorder' : ''}
+                </span>
               </div>
-            ) : (
-              <DropZone
-                fields={fields}
-                selectedId={selectedFieldId}
-                onSelect={setSelectedFieldId}
-                onDelete={deleteField}
-                onReorder={reorderFields}
-              />
-            )}
 
-            <button
-              type="button"
-              onClick={() => addField('text')}
-              style={{ width: '100%', height: 46, border: `1.5px dashed ${C.n300}`, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, color: C.p700, font: `600 13px ${FF}`, background: 'transparent', marginTop: 10, cursor: 'pointer' }}
-            >
-              <span style={{ fontSize: 16, lineHeight: 1 }}>+</span> Add a text field
-            </button>
+              {fields.length === 0 ? (
+                <div
+                  style={{
+                    background: C.n0,
+                    border: `1.5px dashed ${C.n300}`,
+                    borderRadius: 8,
+                    padding: '56px 20px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: 10,
+                    textAlign: 'center',
+                  }}
+                >
+                  <b style={{ font: `700 15px ${FF}`, color: C.n900 }}>No fields yet</b>
+                  <span style={{ font: `400 13px ${FF}`, color: C.n500 }}>
+                    Click a field type in the palette to add it here.
+                  </span>
+                </div>
+              ) : (
+                <DropZone
+                  fields={fields}
+                  selectedId={selectedFieldId}
+                  onSelect={setSelectedFieldId}
+                  onDelete={deleteField}
+                  onReorder={reorderFields}
+                />
+              )}
+
+              <button
+                type="button"
+                onClick={() => addField('text')}
+                style={{
+                  width: '100%',
+                  height: 46,
+                  border: `1.5px dashed ${C.n300}`,
+                  borderRadius: 6,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  color: C.p700,
+                  font: `600 13px ${FF}`,
+                  background: 'transparent',
+                  marginTop: 10,
+                  cursor: 'pointer',
+                }}
+              >
+                <span style={{ fontSize: 16, lineHeight: 1 }}>+</span> Add a text field
+              </button>
+            </div>
           </div>
-        </div>
 
-        {selectedField && (
-          <FieldSettingsPanel
-            field={selectedField}
-            onChange={updateField}
-          />
-        )}
-      </Flex>
+          {selectedField && <FieldSettingsPanel field={selectedField} onChange={updateField} />}
+        </Flex>
       ) : (
         <StyleMode
           title={title}
@@ -748,7 +1353,13 @@ export function FormBuilderPage() {
         />
       )}
 
-      {showTour && <GuidedTour steps={tourSteps} onClose={endTour} onPanel={(p) => setShowSettings(p === 'settings')} />}
+      {showTour && (
+        <GuidedTour
+          steps={tourSteps}
+          onClose={endTour}
+          onPanel={(p) => setShowSettings(p === 'settings')}
+        />
+      )}
     </Box>
   );
 }

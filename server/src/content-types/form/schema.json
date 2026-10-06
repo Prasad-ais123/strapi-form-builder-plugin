@@ -30,7 +30,7 @@
         "enableRateLimit": true,
         "maxSubmissionsPerHour": 60,
         "notificationEmails": [],
-        "redirectUrl": "/",
+        "redirectUrl": null,
         "customCss": "",
         "startDate": null,
         "expiryDate": null,

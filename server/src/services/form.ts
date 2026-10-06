@@ -50,6 +50,10 @@ export default ({ strapi }: { strapi: any }) => ({
   },
 
   async create(data: any) {
+    const paymentCount = (data.fields || []).filter((f: any) => f?.type === 'payment').length;
+    if (paymentCount > 1) {
+      throw new Error('Only one payment button is allowed per form');
+    }
     const slug = generateSlug(data.title || 'form');
     const payload: any = { ...data, slug };
     // Publishing captures the working copy as the immutable live snapshot.
@@ -58,6 +62,10 @@ export default ({ strapi }: { strapi: any }) => ({
   },
 
   async update(id: number, data: any) {
+    const paymentCount = (data.fields || []).filter((f: any) => f?.type === 'payment').length;
+    if (paymentCount > 1) {
+      throw new Error('Only one payment button is allowed per form');
+    }
     const payload: any = { ...data };
     if (data.publishedAt) {
       // Publish: freeze the current working copy as the live version.

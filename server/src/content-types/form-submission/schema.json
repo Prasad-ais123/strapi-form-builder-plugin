@@ -30,6 +30,21 @@
       "type": "enumeration",
       "enum": ["new", "read", "archived"],
       "default": "new"
+    },
+    "paymentStatus": {
+      "type": "string"
+    },
+    "transactionId": {
+      "type": "string"
+    },
+    "amount": {
+      "type": "decimal"
+    },
+    "paymentCurrency": {
+      "type": "string"
+    },
+    "paymentProvider": {
+      "type": "string"
     }
   }
 }

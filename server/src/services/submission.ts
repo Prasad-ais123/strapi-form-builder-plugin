@@ -142,6 +142,49 @@ export default ({ strapi }: { strapi: any }) => ({
       .filter((f: any) => !decorative.includes(f.type))
       .map((f: any) => ({ name: f.name, label: f.label, type: f.type, order: f.order, options: f.options }));
 
+    const paymentField = (live.fields || []).find((f: any) => f.type === 'payment');
+
+    // transaction id and payment are one and the same — normalize all aliases to transactionId
+    let rawTx =
+      body.transactionId ??
+      body.transaction_id ??
+      body.orderId ??
+      body.order_id ??
+      body.paymentId ??
+      body.payment_id ??
+      body.payment ??
+      body.paypal_payment ??
+      (paymentField && body[paymentField.name] ? body[paymentField.name] : null);
+
+    if (rawTx && typeof rawTx === 'object') {
+      rawTx = rawTx.id || rawTx.orderId || rawTx.orderID || rawTx.transactionId || JSON.stringify(rawTx);
+    }
+    const transactionId = rawTx != null && rawTx !== '' ? String(rawTx) : null;
+
+    const paymentStatus =
+      body.paymentStatus ??
+      body.payment_status ??
+      (transactionId ? 'completed' : (paymentField ? 'pending' : null));
+
+    const amountVal =
+      body.amount ??
+      body.paymentAmount ??
+      body.payment_amount ??
+      paymentField?.payment?.amount ??
+      null;
+    const amount = amountVal != null && amountVal !== '' ? Number(amountVal) : null;
+    const paymentCurrency =
+      body.paymentCurrency ??
+      body.payment_currency ??
+      body.currency ??
+      paymentField?.payment?.currency ??
+      (paymentField ? 'USD' : null);
+    const paymentProvider =
+      body.paymentProvider ??
+      body.payment_provider ??
+      paymentField?.payment?.provider ??
+      (paymentField ? 'paypal' : null);
+
     try {
       await strapi.db.query(SUBMISSION_UID).create({
         data: {
@@ -151,6 +194,11 @@ export default ({ strapi }: { strapi: any }) => ({
           ipAddress: meta.ip,
           userAgent: meta.userAgent,
           status: 'new',
+          paymentStatus,
+          transactionId,
+          amount,
+          paymentCurrency,
+          paymentProvider,
         },
       });
     } catch (createErr: any) {
@@ -218,13 +266,46 @@ export default ({ strapi }: { strapi: any }) => ({
       .filter((f: any) => !['heading', 'paragraph', 'divider'].includes(f.type))
       .map((f: any) => f.name);
 
-    const headers = ['id', 'status', 'createdAt', ...fieldNames];
-    const rows = submissions.map((s: any) => [
-      s.id,
-      s.status,
-      s.createdAt,
-      ...fieldNames.map((name: string) => s.data?.[name] ?? ''),
-    ]);
+    const hasPayment =
+      fields.some((f: any) => f.type === 'payment') ||
+      submissions.some((s: any) => s.paymentStatus || s.transactionId || s.data?.payment || s.data?.orderId);
+
+    const paymentHeaders = hasPayment
+      ? ['paymentStatus', 'transactionId', 'amount', 'paymentCurrency', 'paymentProvider']
+      : [];
+    const headers = ['id', 'status', 'createdAt', ...paymentHeaders, ...fieldNames];
+    const rows = submissions.map((s: any) => {
+      let tx =
+        s.transactionId ??
+        s.data?.transactionId ??
+        s.data?.transaction_id ??
+        s.data?.orderId ??
+        s.data?.order_id ??
+        s.data?.paymentId ??
+        s.data?.payment_id ??
+        s.data?.payment ??
+        s.data?.paypal_payment ??
+        '';
+      if (tx && typeof tx === 'object') {
+        tx = tx.id || tx.orderId || tx.orderID || JSON.stringify(tx);
+      }
+      const txStr = String(tx || '');
+      return [
+        s.id,
+        s.status,
+        s.createdAt,
+        ...(hasPayment
+          ? [
+              s.paymentStatus ?? (txStr ? 'completed' : ''),
+              txStr,
+              s.amount ?? s.data?.amount ?? '',
+              s.paymentCurrency ?? s.data?.currency ?? '',
+              s.paymentProvider ?? (txStr ? 'paypal' : ''),
+            ]
+          : []),
+        ...fieldNames.map((name: string) => s.data?.[name] ?? ''),
+      ];
+    });
 
     // ponytail: CSV only. Add xlsx with a real writer (exceljs) if someone actually needs it.
     const csvCell = (v: any) => {
