@@ -40,6 +40,7 @@ export const FIELD_CATEGORIES: { cat: string; items: FieldMeta[] }[] = [
   { cat: 'Choice', items: [
     { type: 'select', name: 'Select', cat: 'Choice' },
     { type: 'state', name: 'States', cat: 'Choice' },
+    { type: 'dynamic-select', name: 'Dynamic Select', cat: 'Choice' },
     { type: 'radio', name: 'Radio', cat: 'Choice' },
     { type: 'checkbox', name: 'Checkbox', cat: 'Choice' },
     { type: 'checkbox-group', name: 'Checkboxes', cat: 'Choice' },
@@ -65,6 +66,7 @@ export const isDecorative = (t: FieldType) => DECORATIVE.includes(t);
 const TYPE_NAMES: Partial<Record<FieldType, string>> = {
   'checkbox-group': 'checkboxes',
   payment: 'payment',
+  'dynamic-select': 'dynamic select',
 };
 export const typeName = (t: FieldType) => TYPE_NAMES[t] || t;
 
@@ -74,6 +76,7 @@ const ICON_COMPONENTS: Partial<Record<FieldType, React.ComponentType<any>>> = {
   email: Mail, number: Hashtag, phone: Phone, url: Link, password: Lock,
   textarea: BulletList, select: ChevronDown, checkbox: Check,
   'checkbox-group': ListPlus, date: Calendar, time: Clock,
+  'dynamic-select': ChevronDown,
 };
 const GLYPHS: Partial<Record<FieldType, string>> = {
   text: 'T', radio: '◉', heading: 'H', paragraph: '¶', divider: '—', hidden: '⊘', payment: '$',

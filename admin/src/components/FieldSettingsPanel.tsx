@@ -3,6 +3,7 @@ import { Trash } from '@strapi/icons';
 import { FormField, FieldOption, ValidationRule, PaymentConfig } from '../types';
 import { C, FF, isDecorative, typeName } from '../ui';
 import { COUNTRIES, getStatesForCountry } from '../data/countriesStates';
+import { getRangeOptions } from '../data/rangeOptions';
 
 interface Props {
   field: FormField;
@@ -10,7 +11,7 @@ interface Props {
 }
 
 // Which settings apply to which field type (drives conditional visibility).
-const PLACEHOLDER_TYPES = ['text', 'email', 'number', 'phone', 'url', 'password', 'textarea', 'select', 'state'];
+const PLACEHOLDER_TYPES = ['text', 'email', 'number', 'phone', 'url', 'password', 'textarea', 'select', 'state', 'dynamic-select'];
 
 const RULE_LABELS: Record<string, string> = {
   minLength: 'Min. length', maxLength: 'Max. length',
@@ -114,7 +115,12 @@ export function FieldSettingsPanel({ field, onChange }: Props) {
       },
     });
 
-  const hasOptions = ['select', 'radio', 'checkbox-group', 'state'].includes(field.type);
+  const isDynamicSelect =
+    field.type === 'dynamic-select' ||
+    (field.min !== undefined && field.max !== undefined && !field.country && !isPayment) ||
+    field.name.startsWith('dynamic_select') ||
+    field.itemLabel !== undefined;
+  const hasOptions = ['select', 'radio', 'checkbox-group'].includes(field.type) && !isDynamicSelect && !field.country;
 
   const addOption = () => update({ options: [...(field.options || []), { label: '', value: '' }] });
   const updateOption = (i: number, patch: Partial<FieldOption>) =>
@@ -188,10 +194,74 @@ export function FieldSettingsPanel({ field, onChange }: Props) {
               <TextField label="Name (technical)" value={field.name} onChange={(v) => update({ name: v })} mono hint="Used as the key in submissions & the API payload." />
               {PLACEHOLDER_TYPES.includes(field.type) && (
                 <TextField
-                  label={['select', 'state'].includes(field.type) ? 'Empty option text' : 'Placeholder'}
+                  label={['select', 'state', 'dynamic-select'].includes(field.type) ? 'Empty option text' : 'Placeholder'}
                   value={field.placeholder || ''}
                   onChange={(v) => update({ placeholder: v })}
                 />
+              )}
+              {isDynamicSelect && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <Labeled label="Min value">
+                      <input
+                        type="number"
+                        className="sfb-inp"
+                        value={field.min ?? 1}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value, 10);
+                          const newMin = isNaN(val) ? 0 : val;
+                          const currentMax = field.max ?? 4;
+                          update({
+                            min: newMin,
+                            options: getRangeOptions(newMin, currentMax),
+                          });
+                        }}
+                        style={inpStyle}
+                      />
+                    </Labeled>
+                    <Labeled label="Max value">
+                      <input
+                        type="number"
+                        min="1"
+                        max="100"
+                        className="sfb-inp"
+                        value={field.max ?? 100}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value, 10);
+                          const newMax = isNaN(val) ? 100 : Math.min(100, Math.max(1, val));
+                          const currentMin = field.min ?? 1;
+                          update({
+                            max: newMax,
+                            options: getRangeOptions(currentMin, newMax),
+                          });
+                        }}
+                        style={inpStyle}
+                      />
+                    </Labeled>
+                  </div>
+                  <div style={{ font: `400 11px ${FF}`, color: C.n500 }}>
+                    Options dynamically generated: {field.min ?? 1} to {field.max ?? 100}
+                  </div>
+                  <div style={{ borderTop: `1px solid ${C.n150}`, paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <span style={{ font: `700 11px ${FF}`, textTransform: 'uppercase', letterSpacing: '.5px', color: C.n600 }}>
+                      Child Inputs Configuration
+                    </span>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                      <TextField
+                        label="Child item label"
+                        value={field.itemLabel || ''}
+                        placeholder="e.g. Store"
+                        onChange={(v) => update({ itemLabel: v })}
+                      />
+                      <TextField
+                        label="Child placeholder"
+                        value={field.itemPlaceholder || ''}
+                        placeholder="e.g. Enter Store #"
+                        onChange={(v) => update({ itemPlaceholder: v })}
+                      />
+                    </div>
+                  </div>
+                </div>
               )}
               {(field.type === 'state' || !!field.country) && (
                 <Labeled label="Country">
@@ -301,6 +371,54 @@ export function FieldSettingsPanel({ field, onChange }: Props) {
               <input className="sfb-inp" value={reqMsg} placeholder={`${field.label || 'This field'} is required`} onChange={(e) => setReqMsg(e.target.value)} style={inpStyle} />
             )}
           </div>
+
+          {isDynamicSelect && (
+            <div style={{ border: `1px solid ${C.n200}`, borderRadius: 5, padding: 11, display: 'flex', flexDirection: 'column', gap: 10, background: C.n0 }}>
+              <span style={{ font: `700 11px ${FF}`, textTransform: 'uppercase', letterSpacing: '.5px', color: C.n600 }}>
+                Child Inputs Validation
+              </span>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '2px 0' }}>
+                <span style={{ font: `600 12px ${FF}`, color: C.n800 }}>
+                  Child inputs <span style={{ font: `400 11px ${FF}`, color: C.n500 }}>(always required)</span>
+                </span>
+                <Toggle on={true} onClick={() => {}} />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <Labeled label="Child input type">
+                  <select
+                    className="sfb-inp"
+                    value={field.childType || 'text'}
+                    onChange={(e) => update({ childType: e.target.value as 'text' | 'number' })}
+                    style={{ ...inpStyle, cursor: 'pointer' }}
+                  >
+                    <option value="text">Text</option>
+                    <option value="number">Number</option>
+                  </select>
+                </Labeled>
+                <TextField
+                  label="Child pattern (regex)"
+                  value={field.childPattern || ''}
+                  placeholder="e.g. ^[0-9]+$"
+                  mono
+                  onChange={(v) => update({ childPattern: v })}
+                />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <TextField
+                  label="Child min length"
+                  value={String(field.childMinLength ?? '')}
+                  placeholder="e.g. 1"
+                  onChange={(v) => update({ childMinLength: v ? Number(v) : undefined })}
+                />
+                <TextField
+                  label="Child max length"
+                  value={String(field.childMaxLength ?? '')}
+                  placeholder="e.g. 10"
+                  onChange={(v) => update({ childMaxLength: v ? Number(v) : undefined })}
+                />
+              </div>
+            </div>
+          )}
 
           {ruleTypes.length > 0 && (
             <>

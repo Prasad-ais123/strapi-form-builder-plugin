@@ -34,4 +34,6 @@ select.sfb-input { appearance: none; cursor: pointer; }
 .sfb-field-error { font-size: 12px; color: #ee5e52; margin: 4px 0 0; }
 .sfb-field--error .sfb-input, .sfb-field--error .sfb-radio-group { border-color: #ee5e52 !important; }
 .sfb-field--error > .sfb-label { color: #ee5e52; }
+.sfb-dynamic-container { display: grid !important; grid-template-columns: repeat(2, 1fr) !important; gap: 10px !important; margin-top: 10px !important; }
+@media (max-width: 600px) { .sfb-dynamic-container { grid-template-columns: 1fr !important; } }
 `;

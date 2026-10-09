@@ -401,7 +401,7 @@ function embedScript(): string {
       return ta;
     }
 
-    if (field.type === 'select' || field.type === 'state') {
+    if (field.type === 'select' || field.type === 'state' || field.type === 'dynamic-select') {
       var sel = document.createElement('select');
       sel.id = id; sel.name = field.name; sel.className = 'sfb-input';
       sel.required = !!field.required;
@@ -413,6 +413,61 @@ function embedScript(): string {
         opt.value = o.value; opt.textContent = o.label || o.value;
         sel.appendChild(opt);
       });
+
+      if (field.min !== undefined && field.max !== undefined) {
+        sel.setAttribute('data-child-type', field.childType || 'text');
+        sel.setAttribute('data-child-required', 'true');
+        if (field.childMinLength) sel.setAttribute('data-child-min-length', String(field.childMinLength));
+        if (field.childMaxLength) sel.setAttribute('data-child-max-length', String(field.childMaxLength));
+        if (field.childPattern) sel.setAttribute('data-child-pattern', field.childPattern);
+        if (field.itemLabel) sel.setAttribute('data-child-label', field.itemLabel);
+        if (field.itemPlaceholder) sel.setAttribute('data-child-placeholder', field.itemPlaceholder);
+
+        var wrap = document.createElement('div');
+        wrap.className = 'sfb-dynamic-wrap';
+        wrap.appendChild(sel);
+        var childContainer = document.createElement('div');
+        childContainer.className = 'sfb-dynamic-container';
+        childContainer.style.marginTop = '10px';
+        childContainer.style.display = 'grid';
+        childContainer.style.gridTemplateColumns = 'repeat(2, 1fr)';
+        childContainer.style.gap = '10px';
+        wrap.appendChild(childContainer);
+
+        var childKey = field.itemLabel || field.name;
+        var itemLabel = field.itemLabel || 'Item';
+
+        sel.addEventListener('change', function () {
+          var count = parseInt(sel.value, 10) || 0;
+          var existingInputs = childContainer.querySelectorAll('input');
+          var oldVals = [];
+          existingInputs.forEach(function (inp) { oldVals.push(inp.value); });
+          childContainer.innerHTML = '';
+          for (var i = 1; i <= count; i++) {
+            var row = document.createElement('div');
+            row.className = 'sfb-field sfb-dynamic-child-row';
+            row.style.marginBottom = '8px';
+            var lbl = document.createElement('label');
+            lbl.className = 'sfb-label';
+            lbl.textContent = itemLabel + ' #' + i + ' *';
+            var inp = document.createElement('input');
+            inp.type = field.childType || 'text';
+            inp.name = childKey + '[]';
+            inp.value = oldVals[i - 1] || '';
+            inp.placeholder = field.itemPlaceholder ? (field.itemPlaceholder + ' ' + i) : ('Enter ' + itemLabel + ' #' + i);
+            inp.className = 'sfb-input';
+            inp.required = true;
+            if (field.childMinLength) inp.minLength = Number(field.childMinLength);
+            if (field.childMaxLength) inp.maxLength = Number(field.childMaxLength);
+            if (field.childPattern) inp.pattern = field.childPattern;
+            row.appendChild(lbl);
+            row.appendChild(inp);
+            childContainer.appendChild(row);
+          }
+        });
+        return wrap;
+      }
+
       return sel;
     }
 
@@ -587,7 +642,10 @@ export default {
       return ctx.badRequest('Only one payment button is allowed per form');
     }
     const { id } = ctx.params;
-    const form = await strapi.plugin(PLUGIN_ID).service('form').update(Number(id), ctx.request.body);
+    const form = await strapi
+      .plugin(PLUGIN_ID)
+      .service('form')
+      .update(Number(id), ctx.request.body);
     if (!form) return ctx.notFound('Form not found');
     ctx.body = form;
   },
@@ -632,7 +690,8 @@ export default {
     if (!schema || !schema.data) return ctx.notFound('Form not found');
 
     const form = schema.data;
-    if (!form.settings?.publicPage) return ctx.notFound('This form does not have a public page enabled');
+    if (!form.settings?.publicPage)
+      return ctx.notFound('This form does not have a public page enabled');
 
     ctx.set('Content-Type', 'text/html; charset=utf-8');
 
@@ -641,15 +700,18 @@ export default {
     // provider is configured — overrides the header set upstream by helmet.
     const provider = form.settings?.captcha?.provider;
     if (provider && provider !== 'none') {
-      ctx.set('Content-Security-Policy', [
-        "default-src 'self'",
-        "script-src 'self' https://challenges.cloudflare.com https://www.google.com https://www.gstatic.com",
-        "frame-src https://challenges.cloudflare.com https://www.google.com",
-        "style-src 'self' 'unsafe-inline' https:",
-        "img-src 'self' data: https:",
-        "connect-src 'self' https:",
-        "font-src 'self' https: data:",
-      ].join(';'));
+      ctx.set(
+        'Content-Security-Policy',
+        [
+          "default-src 'self'",
+          "script-src 'self' https://challenges.cloudflare.com https://www.google.com https://www.gstatic.com",
+          'frame-src https://challenges.cloudflare.com https://www.google.com',
+          "style-src 'self' 'unsafe-inline' https:",
+          "img-src 'self' data: https:",
+          "connect-src 'self' https:",
+          "font-src 'self' https: data:",
+        ].join(';')
+      );
     }
 
     ctx.body = publicPageHtml(form);

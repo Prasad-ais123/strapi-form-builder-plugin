@@ -98,6 +98,9 @@ function TextareaField({ field }: { field: FormField }) {
 
 function SelectField({ field }: { field: FormField }) {
   const [val, setVal] = useState('');
+  const isDynamic = field.min !== undefined && field.max !== undefined && !field.country;
+  const count = parseInt(val, 10) || 0;
+  const itemLabel = field.itemLabel || 'Item';
   return (
     <div style={fieldWrap}>
       <Label field={field} />
@@ -133,6 +136,22 @@ function SelectField({ field }: { field: FormField }) {
           ▼
         </span>
       </div>
+      {isDynamic && count > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, marginTop: 10 }}>
+          {Array.from({ length: count }, (_, idx) => (
+            <div key={idx} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <label style={labelStyle}>{itemLabel} #{idx + 1} *</label>
+              <input
+                type={field.childType || 'text'}
+                placeholder={field.itemPlaceholder ? `${field.itemPlaceholder} ${idx + 1}` : `Enter ${itemLabel} #${idx + 1}`}
+                style={inputBase}
+                required
+                readOnly
+              />
+            </div>
+          ))}
+        </div>
+      )}
       {field.helpText && <p style={helpStyle}>{field.helpText}</p>}
     </div>
   );
@@ -383,9 +402,8 @@ function PreviewField({ field }: { field: FormField }) {
       content = <TextareaField field={field} />;
       break;
     case 'select':
-      content = <SelectField field={field} />;
-      break;
     case 'state':
+    case 'dynamic-select':
       content = <SelectField field={field} />;
       break;
     case 'radio':

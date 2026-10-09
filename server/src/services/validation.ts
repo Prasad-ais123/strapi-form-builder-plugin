@@ -21,6 +21,15 @@ export interface FormField {
   required: boolean;
   validation?: ValidationRule[];
   payment?: PaymentConfig;
+  min?: number;
+  max?: number;
+  itemLabel?: string;
+  itemPlaceholder?: string;
+  itemRequired?: boolean;
+  childType?: 'text' | 'number';
+  childMinLength?: number;
+  childMaxLength?: number;
+  childPattern?: string;
 }
 
 export interface ValidationResult {
@@ -57,7 +66,11 @@ const validation = {
           fieldErrors.push(`${field.label}: enter a valid email address`);
         }
         if (field.type === 'url') {
-          try { new URL(String(value)); } catch { fieldErrors.push(`${field.label}: enter a valid URL`); }
+          try {
+            new URL(String(value));
+          } catch {
+            fieldErrors.push(`${field.label}: enter a valid URL`);
+          }
         }
         if (field.type === 'number' && isNaN(Number(value))) {
           fieldErrors.push(`${field.label}: enter a valid number`);
@@ -68,6 +81,69 @@ const validation = {
         if (rule.type === 'required') continue; // handled above
         const error = this.runRule(rule, value, field, data);
         if (error) fieldErrors.push(error);
+      }
+
+      // dynamic select child inputs validation
+      if (field.min !== undefined && field.max !== undefined && Number(value) > 0) {
+        const childKey = field.itemLabel || field.name;
+        const rawItems = data[childKey] ?? data[field.name + '[]'] ?? data[childKey + '[]'];
+        const items = Array.isArray(rawItems) ? rawItems : rawItems != null ? [rawItems] : [];
+        const expectedCount = Number(value);
+        const labelPrefix = field.itemLabel || 'Item';
+        let hasEmptyChild = false;
+        if (items.length < expectedCount) {
+          fieldErrors.push(
+            `${field.label}: please provide all ${expectedCount} ${field.itemLabel ? field.itemLabel.toLowerCase() + 's' : 'items'}`
+          );
+          hasEmptyChild = true;
+        }
+
+        for (let idx = 0; idx < expectedCount; idx++) {
+          const valStr = String(items[idx] ?? '').trim();
+          if (!valStr) {
+            hasEmptyChild = true;
+            fieldErrors.push(`${field.label}: ${labelPrefix} #${idx + 1} is required`);
+          }
+        }
+        if (
+          hasEmptyChild &&
+          !fieldErrors.includes(
+            `${field.label}: all ${expectedCount} ${field.itemLabel ? field.itemLabel.toLowerCase() + 's' : 'items'} are required`
+          )
+        ) {
+          fieldErrors.push(
+            `${field.label}: all ${expectedCount} ${field.itemLabel ? field.itemLabel.toLowerCase() + 's' : 'items'} are required`
+          );
+        }
+
+        // Validate child input constraints (type, minLength, maxLength, pattern)
+        items.slice(0, expectedCount).forEach((it: any, idx: number) => {
+          const valStr = String(it ?? '').trim();
+          if (!valStr) return;
+
+          if (field.childType === 'number' && isNaN(Number(valStr))) {
+            fieldErrors.push(`${field.label}: ${labelPrefix} #${idx + 1} must be a valid number`);
+          }
+          if (field.childMinLength && valStr.length < field.childMinLength) {
+            fieldErrors.push(
+              `${field.label}: ${labelPrefix} #${idx + 1} must be at least ${field.childMinLength} characters`
+            );
+          }
+          if (field.childMaxLength && valStr.length > field.childMaxLength) {
+            fieldErrors.push(
+              `${field.label}: ${labelPrefix} #${idx + 1} must be at most ${field.childMaxLength} characters`
+            );
+          }
+          if (field.childPattern) {
+            try {
+              if (!new RegExp(field.childPattern).test(valStr)) {
+                fieldErrors.push(`${field.label}: ${labelPrefix} #${idx + 1} is invalid`);
+              }
+            } catch {
+              // ignore malformed regex
+            }
+          }
+        });
       }
 
       if (fieldErrors.length > 0) {
@@ -102,8 +178,7 @@ const validation = {
           return rule.message || `Maximum value is ${rule.value}`;
         break;
       case 'pattern':
-        if (!new RegExp(rule.value).test(String(value)))
-          return rule.message || `Invalid format`;
+        if (!new RegExp(rule.value).test(String(value))) return rule.message || `Invalid format`;
         break;
       case 'email':
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value)))
@@ -117,8 +192,7 @@ const validation = {
         }
         break;
       case 'matchField':
-        if (value !== allData[rule.value])
-          return rule.message || `Fields do not match`;
+        if (value !== allData[rule.value]) return rule.message || `Fields do not match`;
         break;
     }
     return null;

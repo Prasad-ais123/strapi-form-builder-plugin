@@ -17,6 +17,7 @@ import { PLUGIN_ID } from '../pluginId';
 import { C, FF } from '../ui';
 import { FormTheme, DEFAULT_THEME, resolveThemeVars } from '../theme';
 import { getStatesForCountry } from '../data/countriesStates';
+import { getRangeOptions } from '../data/rangeOptions';
 
 const DEFAULT_SETTINGS: FormSettings = {
   submitButtonText: 'Submit',
@@ -705,23 +706,31 @@ function SettingsDrawer({
 function createField(type: FieldType, order: number): FormField {
   const id = uuid();
   const isState = type === 'state';
+  const isDynamicSelect = type === 'dynamic-select';
   return {
     id,
-    type: isState ? 'select' : type,
+    type: isState || isDynamicSelect ? 'select' : type,
     // unique per-field name derived from the uuid — Date.now() collided for fields added in the same ms
-    name: `${isState ? 'state' : type}_${id.slice(0, 8)}`,
-    label: isState ? 'State' : type.charAt(0).toUpperCase() + type.slice(1),
-    placeholder: isState ? 'Select a state…' : '',
+    name: `${isState ? 'state' : isDynamicSelect ? 'dynamic_select' : type}_${id.slice(0, 8)}`,
+    label: isState ? 'State' : isDynamicSelect ? 'Dynamic Select' : type.charAt(0).toUpperCase() + type.slice(1),
+    placeholder: isState ? 'Select a state…' : isDynamicSelect ? 'Select a number…' : '',
     helpText: '',
     required: type === 'payment',
     order,
     width: 'full',
     country: isState ? 'US' : undefined,
+    min: isDynamicSelect ? 1 : undefined,
+    max: isDynamicSelect ? 100 : undefined,
+    itemLabel: isDynamicSelect ? 'Store' : undefined,
+    itemPlaceholder: isDynamicSelect ? 'Enter Store #' : undefined,
+    itemRequired: isDynamicSelect ? true : undefined,
     options: isState
       ? getStatesForCountry('US')
-      : ['select', 'radio', 'checkbox-group'].includes(type)
-        ? [{ label: 'Option 1', value: 'option_1' }]
-        : undefined,
+      : isDynamicSelect
+        ? getRangeOptions(1, 100)
+        : ['select', 'radio', 'checkbox-group'].includes(type)
+          ? [{ label: 'Option 1', value: 'option_1' }]
+          : undefined,
     validation: [],
     payment:
       type === 'payment'

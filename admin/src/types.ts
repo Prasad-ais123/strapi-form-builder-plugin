@@ -19,7 +19,8 @@ export type FieldType =
   | 'paragraph'
   | 'divider'
   | 'payment'
-  | 'state';
+  | 'state'
+  | 'dynamic-select';
 
 export interface PaymentConfig {
   provider: 'paypal';
@@ -56,6 +57,15 @@ export interface FormField {
   cssClass?: string;
   payment?: PaymentConfig;
   country?: string;
+  min?: number;
+  max?: number;
+  itemLabel?: string;
+  itemPlaceholder?: string;
+  itemRequired?: boolean;
+  childType?: 'text' | 'number';
+  childMinLength?: number;
+  childMaxLength?: number;
+  childPattern?: string;
 }
 
 export interface ConditionalRule {

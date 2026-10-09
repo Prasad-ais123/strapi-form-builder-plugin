@@ -8,11 +8,19 @@ const CAPTCHA_ENDPOINTS: Record<string, string> = {
 };
 
 // Server-side token check. Fails closed: any network/parse error rejects the submission.
-export async function verifyCaptcha(provider: string, secret: string, token: string, ip: string): Promise<boolean> {
+export async function verifyCaptcha(
+  provider: string,
+  secret: string,
+  token: string,
+  ip: string
+): Promise<boolean> {
   const url = CAPTCHA_ENDPOINTS[provider];
   if (!url) return false; // unknown provider — fail closed
   // trim: users often paste keys with stray leading/trailing whitespace
-  const params = new URLSearchParams({ secret: (secret || '').trim(), response: (token || '').trim() });
+  const params = new URLSearchParams({
+    secret: (secret || '').trim(),
+    response: (token || '').trim(),
+  });
   if (ip) params.append('remoteip', ip);
   try {
     const res = await fetch(url, {
@@ -33,7 +41,10 @@ export default ({ strapi }: { strapi: any }) => ({
   // "Test" button). A dummy token is sent: a valid secret comes back with an
   // "invalid-input-response" error (secret OK, token bad); an invalid secret returns
   // "invalid-input-secret". This lets us catch wrong secret keys before publishing.
-  async testCaptchaSecret(provider: string, secret: string): Promise<{ ok: boolean; reason?: string }> {
+  async testCaptchaSecret(
+    provider: string,
+    secret: string
+  ): Promise<{ ok: boolean; reason?: string }> {
     const url = CAPTCHA_ENDPOINTS[provider];
     if (!url) return { ok: false, reason: 'Unknown provider' };
     if (!secret || !secret.trim()) return { ok: false, reason: 'Secret key is empty' };
@@ -56,15 +67,8 @@ export default ({ strapi }: { strapi: any }) => ({
     }
   },
 
-  async submit(
-    slug: string,
-    body: Record<string, any>,
-    meta: { ip: string; userAgent: string }
-  ) {
-    const form = await strapi
-      .plugin(PLUGIN_ID)
-      .service('form')
-      .findBySlug(slug);
+  async submit(slug: string, body: Record<string, any>, meta: { ip: string; userAgent: string }) {
+    const form = await strapi.plugin(PLUGIN_ID).service('form').findBySlug(slug);
 
     // Only a published form accepts submissions, and against its published
     // snapshot — not the working draft the admin may be editing.
@@ -109,7 +113,12 @@ export default ({ strapi }: { strapi: any }) => ({
     // CAPTCHA — verify the challenge token against the provider before accepting
     const captcha = live.settings?.captcha;
     if (captcha && captcha.provider && captcha.provider !== 'none' && captcha.secretKey) {
-      const ok = await verifyCaptcha(captcha.provider, captcha.secretKey, body._fc_captcha, meta.ip);
+      const ok = await verifyCaptcha(
+        captcha.provider,
+        captcha.secretKey,
+        body._fc_captcha,
+        meta.ip
+      );
       if (!ok) {
         const err: any = new Error('Captcha verification failed. Please try again.');
         err.name = 'CaptchaError';
@@ -140,7 +149,13 @@ export default ({ strapi }: { strapi: any }) => ({
     const decorative = ['heading', 'paragraph', 'divider'];
     const fieldsSnapshot = (live.fields || [])
       .filter((f: any) => !decorative.includes(f.type))
-      .map((f: any) => ({ name: f.name, label: f.label, type: f.type, order: f.order, options: f.options }));
+      .map((f: any) => ({
+        name: f.name,
+        label: f.label,
+        type: f.type,
+        order: f.order,
+        options: f.options,
+      }));
 
     const paymentField = (live.fields || []).find((f: any) => f.type === 'payment');
 
@@ -157,14 +172,15 @@ export default ({ strapi }: { strapi: any }) => ({
       (paymentField && body[paymentField.name] ? body[paymentField.name] : null);
 
     if (rawTx && typeof rawTx === 'object') {
-      rawTx = rawTx.id || rawTx.orderId || rawTx.orderID || rawTx.transactionId || JSON.stringify(rawTx);
+      rawTx =
+        rawTx.id || rawTx.orderId || rawTx.orderID || rawTx.transactionId || JSON.stringify(rawTx);
     }
     const transactionId = rawTx != null && rawTx !== '' ? String(rawTx) : null;
 
     const paymentStatus =
       body.paymentStatus ??
       body.payment_status ??
-      (transactionId ? 'completed' : (paymentField ? 'pending' : null));
+      (transactionId ? 'completed' : paymentField ? 'pending' : null);
 
     const amountVal =
       body.amount ??
@@ -262,18 +278,35 @@ export default ({ strapi }: { strapi: any }) => ({
     });
 
     const fields: any[] = form?.fields || [];
-    const fieldNames = fields
-      .filter((f: any) => !['heading', 'paragraph', 'divider'].includes(f.type))
-      .map((f: any) => f.name);
+    const exportColumns: { key: string; label: string }[] = [];
+    for (const f of fields.filter(
+      (f: any) => !['heading', 'paragraph', 'divider'].includes(f.type)
+    )) {
+      exportColumns.push({ key: f.name, label: f.label });
+      if (f.min !== undefined && f.max !== undefined) {
+        const childKey = f.itemLabel || f.name;
+        if (childKey !== f.name) {
+          exportColumns.push({ key: childKey, label: f.itemLabel || `${f.label} Items` });
+        }
+      }
+    }
 
     const hasPayment =
       fields.some((f: any) => f.type === 'payment') ||
-      submissions.some((s: any) => s.paymentStatus || s.transactionId || s.data?.payment || s.data?.orderId);
+      submissions.some(
+        (s: any) => s.paymentStatus || s.transactionId || s.data?.payment || s.data?.orderId
+      );
 
     const paymentHeaders = hasPayment
       ? ['paymentStatus', 'transactionId', 'amount', 'paymentCurrency', 'paymentProvider']
       : [];
-    const headers = ['id', 'status', 'createdAt', ...paymentHeaders, ...fieldNames];
+    const headers = [
+      'id',
+      'status',
+      'createdAt',
+      ...paymentHeaders,
+      ...exportColumns.map((c) => c.label),
+    ];
     const rows = submissions.map((s: any) => {
       let tx =
         s.transactionId ??
@@ -303,7 +336,10 @@ export default ({ strapi }: { strapi: any }) => ({
               s.paymentProvider ?? (txStr ? 'paypal' : ''),
             ]
           : []),
-        ...fieldNames.map((name: string) => s.data?.[name] ?? ''),
+        ...exportColumns.map((col) => {
+          const raw = s.data?.[col.key];
+          return Array.isArray(raw) ? raw.join('; ') : (raw ?? '');
+        }),
       ];
     });
 
@@ -314,10 +350,7 @@ export default ({ strapi }: { strapi: any }) => ({
       if (/^[=+\-@]/.test(s)) s = `'${s}`;
       return `"${s.replace(/"/g, '""')}"`;
     };
-    const lines = [
-      headers.join(','),
-      ...rows.map((r: any[]) => r.map(csvCell).join(',')),
-    ];
+    const lines = [headers.join(','), ...rows.map((r: any[]) => r.map(csvCell).join(','))];
     return lines.join('\n');
   },
 
