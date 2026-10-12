@@ -154,6 +154,7 @@ export function SubmissionsPage() {
   const dataFields: FormField[] = (form?.fields || []).filter(
     (f) => !['heading', 'paragraph', 'divider', 'payment'].includes(f.type)
   );
+  const paymentField = (form?.fields || []).find((f) => f.type === 'payment');
 
   const getTxId = (sub: FormSubmission): string => {
     let raw =
@@ -222,6 +223,7 @@ export function SubmissionsPage() {
     const cols: { name: string; label: string }[] = [];
     if (hasPayment) {
       cols.push({ name: 'transactionId', label: 'Transaction ID' });
+      cols.push({ name: paymentField?.name || 'payment', label: paymentField?.label || 'Payment' });
     }
     const seen = new Set<string>(cols.map((c) => c.name));
     for (const f of dataFields) {
@@ -240,10 +242,11 @@ export function SubmissionsPage() {
       const labelByName = new Map<string, string>();
       for (const f of allDefs) {
         labelByName.set(f.name, f.label);
-        if (f.min !== undefined && f.max !== undefined) {
-          const childKey = f.itemLabel || f.name;
-          labelByName.set(childKey, f.itemLabel || `${f.label} Items`);
-          labelByName.set(`${f.name}_items`, f.itemLabel || `${f.label} Items`);
+        const df = f as any;
+        if (df.min !== undefined && df.max !== undefined) {
+          const childKey = df.itemLabel || f.name;
+          labelByName.set(childKey, df.itemLabel || `${f.label} Items`);
+          labelByName.set(`${f.name}_items`, df.itemLabel || `${f.label} Items`);
         }
       }
       for (const k of Object.keys(s.data || {})) {
@@ -709,38 +712,24 @@ export function SubmissionsPage() {
                                 whiteSpace: 'nowrap',
                               }}
                             >
-                              {getTxId(sub)}
+                              {getTxId(sub) || '—'}
                             </Typography>
                           </Td>
                         );
                       }
-                      if (c.name === 'paymentStatus') {
-                        const val = String(
-                          sub.paymentStatus ??
-                            (getTxId(sub) ? 'completed' : (sub.data?.payment_status ?? ''))
-                        );
-                        return (
-                          <Td key={c.name}>
-                            <Typography
-                              style={{
-                                maxWidth: 150,
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                              }}
-                            >
-                              {val}
-                            </Typography>
-                          </Td>
-                        );
-                      }
-                      if (c.name === 'amount') {
+                      if (c.name === (paymentField?.name || 'payment') || c.name === 'amount') {
                         const amt =
                           sub.amount ??
                           sub.data?.amount ??
                           sub.data?.paymentAmount ??
                           sub.data?.payment_amount;
-                        const val = amt != null && amt !== '' ? String(amt) : '';
+                        const cur = sub.paymentCurrency || sub.data?.currency || 'USD';
+                        const val =
+                          amt != null && amt !== '' && !isNaN(Number(amt))
+                            ? `${cur} ${Number(amt).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                            : (sub.data?.[c.name] && String(sub.data[c.name]) !== getTxId(sub))
+                              ? String(sub.data[c.name])
+                              : '—';
                         return (
                           <Td key={c.name}>
                             <Typography
@@ -1057,10 +1046,11 @@ export function SubmissionsPage() {
                   const labelByName = new Map<string, string>();
                   for (const f of defs) {
                     labelByName.set(f.name, f.label);
-                    if (f.min !== undefined && f.max !== undefined) {
-                      const childKey = f.itemLabel || f.name;
-                      labelByName.set(childKey, f.itemLabel || `${f.label} Items`);
-                      labelByName.set(`${f.name}_items`, f.itemLabel || `${f.label} Items`);
+                    const df = f as any;
+                    if (df.min !== undefined && df.max !== undefined) {
+                      const childKey = df.itemLabel || f.name;
+                      labelByName.set(childKey, df.itemLabel || `${f.label} Items`);
+                      labelByName.set(`${f.name}_items`, df.itemLabel || `${f.label} Items`);
                     }
                   }
                   const orderByName = new Map(defs.map((f, i) => [f.name, f.order ?? i] as const));
@@ -1073,7 +1063,23 @@ export function SubmissionsPage() {
                     </div>
                   ) : (
                     entries.map(([name, raw], i) => {
-                      const isArr = Array.isArray(raw);
+                      const isPayment =
+                        name === (paymentField?.name || 'payment') ||
+                        selected.fields?.some((f) => f.name === name && f.type === 'payment');
+                      let displayVal = raw;
+                      if (isPayment) {
+                        const amt =
+                          selected.amount ??
+                          selected.data?.amount ??
+                          selected.data?.paymentAmount;
+                        const cur = selected.paymentCurrency || selected.data?.currency || 'USD';
+                        if (amt != null && amt !== '' && !isNaN(Number(amt))) {
+                          displayVal = `${cur} ${Number(amt).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                        } else if (raw && String(raw) === getTxId(selected)) {
+                          displayVal = '—';
+                        }
+                      }
+                      const isArr = Array.isArray(displayVal);
                       return (
                         <div
                           key={name || i}
@@ -1097,7 +1103,7 @@ export function SubmissionsPage() {
                           </span>
                           {isArr ? (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                              {raw.map((item, idx) => (
+                              {displayVal.map((item: any, idx: number) => (
                                 <span
                                   key={idx}
                                   style={{
@@ -1115,12 +1121,12 @@ export function SubmissionsPage() {
                             <span
                               style={{
                                 font: `400 13px ${FF}`,
-                                color: raw ? C.n800 : C.n400,
+                                color: displayVal ? C.n800 : C.n400,
                                 lineHeight: 1.5,
                                 wordBreak: 'break-word',
                               }}
                             >
-                              {String(raw ?? '') || '—'}
+                              {String(displayVal ?? '') || '—'}
                             </span>
                           )}
                         </div>

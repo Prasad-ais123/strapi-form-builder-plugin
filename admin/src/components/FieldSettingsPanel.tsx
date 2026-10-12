@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Trash } from '@strapi/icons';
 import { FormField, FieldOption, ValidationRule, PaymentConfig } from '../types';
 import { C, FF, isDecorative, typeName } from '../ui';
@@ -7,11 +7,12 @@ import { getRangeOptions } from '../data/rangeOptions';
 
 interface Props {
   field: FormField;
+  allFields?: FormField[];
   onChange: (updated: FormField) => void;
 }
 
 // Which settings apply to which field type (drives conditional visibility).
-const PLACEHOLDER_TYPES = ['text', 'email', 'number', 'phone', 'url', 'password', 'textarea', 'select', 'state', 'dynamic-select'];
+const PLACEHOLDER_TYPES = ['text', 'email', 'number', 'phone', 'url', 'password', 'textarea', 'select', 'state', 'dynamic-select', 'calculated'];
 
 const RULE_LABELS: Record<string, string> = {
   minLength: 'Min. length', maxLength: 'Max. length',
@@ -23,7 +24,7 @@ const RULE_LABELS: Record<string, string> = {
 // email/url/number already auto-validate their format by type, so those rules
 // are only offered where you'd validate free text.
 function ruleTypesFor(type: string): string[] {
-  if (type === 'number') return ['min', 'max'];
+  if (type === 'number' || type === 'calculated') return ['min', 'max'];
   if (type === 'text' || type === 'textarea') return ['minLength', 'maxLength', 'pattern', 'email', 'url'];
   if (['email', 'url', 'phone', 'password'].includes(type)) return ['minLength', 'maxLength', 'pattern'];
   return []; // select, radio, checkbox, checkbox-group, date, time → only Required
@@ -97,29 +98,76 @@ function Seg({ value, onChange }: { value: 'full' | 'half'; onChange: (v: 'full'
   );
 }
 
-export function FieldSettingsPanel({ field, onChange }: Props) {
+const NON_LOGIC_TYPES = [
+  'text',
+  'email',
+  'password',
+  'url',
+  'textarea',
+  'phone',
+  'heading',
+  'paragraph',
+  'divider',
+  'hidden',
+  'dynamic-select',
+  'payment',
+];
+
+const NON_LINKABLE_TYPES = [
+  'text',
+  'email',
+  'password',
+  'url',
+  'textarea',
+  'phone',
+  'heading',
+  'paragraph',
+  'divider',
+  'hidden',
+  'payment',
+];
+
+export function FieldSettingsPanel({ field, allFields, onChange }: Props) {
   ensureStyle();
   const deco = isDecorative(field.type);
   const isHidden = field.type === 'hidden';
-  const [tab, setTab] = useState<'general' | 'validation'>('general');
-  const update = (patch: Partial<FormField>) => onChange({ ...field, ...patch });
   const isPayment = field.type === 'payment';
-  const updatePayment = (patch: Partial<PaymentConfig>) =>
-    update({
-      payment: {
-        provider: field.payment?.provider || 'paypal',
-        amount: Math.max(1, field.payment?.amount ?? 1),
-        currency: field.payment?.currency || 'USD',
-        description: field.payment?.description || '',
-        ...patch,
-      },
-    });
-
   const isDynamicSelect =
     field.type === 'dynamic-select' ||
     (field.min !== undefined && field.max !== undefined && !field.country && !isPayment) ||
     field.name.startsWith('dynamic_select') ||
     field.itemLabel !== undefined;
+  const hasLogic = !NON_LOGIC_TYPES.includes(field.type) && !isDynamicSelect;
+  const [tab, setTab] = useState<'general' | 'validation' | 'logic'>('general');
+  const [selectedInsertField, setSelectedInsertField] = useState('');
+
+  useEffect(() => {
+    if (!hasLogic && tab === 'logic') {
+      setTab('general');
+    }
+  }, [hasLogic, tab]);
+  const update = (patch: Partial<FormField>) => onChange({ ...field, ...patch });
+
+  const currentIdx = (allFields || []).findIndex((f) => f.id === field.id);
+  const priorFields = (allFields || []).filter(
+    (f, idx) =>
+      f.id !== field.id &&
+      (currentIdx === -1 || idx < currentIdx) &&
+      !NON_LINKABLE_TYPES.includes(f.type)
+  );
+  const updatePayment = (patch: Partial<PaymentConfig>) =>
+    update({
+      payment: {
+        provider: 'paypal',
+        currency: 'USD',
+        amount: 1,
+        description: '',
+        amountType: 'fixed',
+        ...field.payment,
+        ...patch,
+      },
+    });
+
   const hasOptions = ['select', 'radio', 'checkbox-group'].includes(field.type) && !isDynamicSelect && !field.country;
 
   const addOption = () => update({ options: [...(field.options || []), { label: '', value: '' }] });
@@ -152,7 +200,7 @@ export function FieldSettingsPanel({ field, onChange }: Props) {
 
   const kicker = `${typeName(field.type)} field`.toUpperCase();
 
-  const tabBtn = (id: 'general' | 'validation', label: string) => (
+  const tabBtn = (id: 'general' | 'validation' | 'logic', label: string) => (
     <button
       type="button"
       onClick={() => setTab(id)}
@@ -172,6 +220,7 @@ export function FieldSettingsPanel({ field, onChange }: Props) {
       <div style={{ display: 'flex', gap: 2, padding: '12px 18px 0', borderBottom: `1px solid ${C.n150}` }}>
         {tabBtn('general', 'General')}
         {!deco && !isHidden && tabBtn('validation', 'Validation')}
+        {hasLogic && tabBtn('logic', 'Logic')}
       </div>
 
       {isHidden && (
@@ -305,20 +354,117 @@ export function FieldSettingsPanel({ field, onChange }: Props) {
                       <option value="USD">USD</option>
                     </select>
                   </Labeled>
-                  <Labeled label="Amount">
-                    <input
-                      type="number"
-                      min="1"
-                      step="any"
-                      className="sfb-inp"
-                      value={field.payment?.amount ?? 1}
-                      onChange={(e) => {
-                        const val = parseFloat(e.target.value);
-                        updatePayment({ amount: isNaN(val) ? 1 : Math.max(1, val) });
-                      }}
-                      style={inpStyle}
-                    />
+
+                  <Labeled label="Pricing Mode">
+                    <div style={{ display: 'flex', border: `1px solid ${C.n200}`, borderRadius: 4, overflow: 'hidden' }}>
+                      <button
+                        type="button"
+                        style={{
+                          flex: 1, padding: '7px 0', font: `600 12px ${FF}`, cursor: 'pointer', border: 'none',
+                          background: (field.payment?.amountType || 'fixed') === 'fixed' ? C.p600 : 'transparent',
+                          color: (field.payment?.amountType || 'fixed') === 'fixed' ? '#fff' : C.n600,
+                        }}
+                        onClick={() => updatePayment({ amountType: 'fixed' })}
+                      >
+                        Fixed
+                      </button>
+                      <button
+                        type="button"
+                        style={{
+                          flex: 1, padding: '7px 0', font: `600 12px ${FF}`, cursor: 'pointer', border: 'none',
+                          background: field.payment?.amountType === 'calculated' ? C.p600 : 'transparent',
+                          color: field.payment?.amountType === 'calculated' ? '#fff' : C.n600,
+                        }}
+                        onClick={() => updatePayment({ amountType: 'calculated' })}
+                      >
+                        Dynamic Formula
+                      </button>
+                    </div>
                   </Labeled>
+
+                  {field.payment?.amountType === 'calculated' ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '10px 12px', background: C.n100, borderRadius: 6, border: `1px solid ${C.n200}` }}>
+                      <span style={{ font: `600 11px ${FF}`, color: C.p700 }}>Link Preceding Field</span>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <select
+                          className="sfb-inp"
+                          value={selectedInsertField}
+                          onChange={(e) => setSelectedInsertField(e.target.value)}
+                          style={{ ...inpStyle, cursor: 'pointer', flex: 1, height: 32, fontSize: 12 }}
+                        >
+                          <option value="">-- Choose field --</option>
+                          {priorFields.map((f) => (
+                            <option key={f.id} value={f.name}>
+                              {f.label} ({f.name})
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          disabled={!selectedInsertField}
+                          onClick={() => {
+                            if (!selectedInsertField) return;
+                            const cur = field.payment?.amountFormula || '';
+                            const toIns = `{${selectedInsertField}}`;
+                            updatePayment({
+                              amountType: 'calculated',
+                              amountFormula: cur ? `${cur} ${toIns}` : toIns,
+                            });
+                          }}
+                          style={{
+                            padding: '4px 10px',
+                            borderRadius: 4,
+                            background: selectedInsertField ? C.p600 : C.n200,
+                            color: '#fff',
+                            border: 'none',
+                            font: `600 11px ${FF}`,
+                            cursor: selectedInsertField ? 'pointer' : 'not-allowed',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          + Insert
+                        </button>
+                      </div>
+                      <TextField
+                        label="Amount Formula"
+                        value={field.payment?.amountFormula || ''}
+                        onChange={(v) => updatePayment({ amountType: 'calculated', amountFormula: v })}
+                        placeholder="e.g. ({stores} * 25) + ({parking} * 15)"
+                        mono
+                        hint="Calculates total checkout price dynamically in USD"
+                      />
+                      <Labeled label="Fallback Amount (USD)">
+                        <input
+                          type="number"
+                          min="1"
+                          step="any"
+                          className="sfb-inp"
+                          value={field.payment?.amount ?? 1}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value);
+                            updatePayment({ amount: isNaN(val) ? 1 : Math.max(1, val) });
+                          }}
+                          style={inpStyle}
+                        />
+                      </Labeled>
+                    </div>
+                  ) : (
+                    <Labeled label="Amount (USD)">
+                      <input
+                        type="number"
+                        min="1"
+                        step="any"
+                        className="sfb-inp"
+                        value={field.payment?.amount ?? 1}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value);
+                          updatePayment({ amount: isNaN(val) ? 1 : Math.max(1, val) });
+                        }}
+                        style={inpStyle}
+                      />
+                    </Labeled>
+                  )}
+
                   <TextField
                     label="Description"
                     value={field.payment?.description || ''}
@@ -465,6 +611,120 @@ export function FieldSettingsPanel({ field, onChange }: Props) {
               </div>
             </>
           )}
+        </div>
+      )}
+
+      {tab === 'logic' && hasLogic && (
+        <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ font: `400 12px ${FF}`, color: C.n500, lineHeight: 1.5 }}>
+            Configure dynamic rules, cross-field limit constraints, or auto-calculated formulas linked to other fields.
+          </div>
+
+          <div style={{ padding: '12px 14px', background: C.n100, borderRadius: 6, border: `1px solid ${C.n200}`, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <span style={{ font: `600 12px ${FF}`, color: C.p700 }}>Choose Field to Link</span>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <select
+                className="sfb-inp"
+                value={selectedInsertField}
+                onChange={(e) => setSelectedInsertField(e.target.value)}
+                style={{ ...inpStyle, cursor: 'pointer', flex: 1 }}
+              >
+                <option value="">-- Choose field --</option>
+                {priorFields.map((f) => (
+                  <option key={f.id} value={f.name}>
+                    {f.label} ({f.name})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <span style={{ font: `400 11px ${FF}`, color: C.n500 }}>
+              Pick a field above, then click "+ Insert" into the formula below.
+            </span>
+          </div>
+
+          {/* Dynamic Limit Constraint */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, borderBottom: `1px solid ${C.n150}`, paddingBottom: 16 }}>
+            <div style={{ font: `700 13px ${FF}`, color: C.n800 }}>Dynamic Max Limit Constraint</div>
+            <div style={{ font: `400 11px ${FF}`, color: C.n500 }}>
+              Caps the maximum allowed value of this field dynamically based on other inputs.
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                disabled={!selectedInsertField}
+                onClick={() => {
+                  if (!selectedInsertField) return;
+                  const cur = field.logicMaxFormula || '';
+                  const toIns = `{${selectedInsertField}}`;
+                  update({ logicMaxFormula: cur ? `${cur} ${toIns}` : toIns });
+                }}
+                style={{
+                  padding: '4px 10px',
+                  borderRadius: 4,
+                  background: selectedInsertField ? C.p600 : C.n200,
+                  color: '#fff',
+                  border: 'none',
+                  font: `600 11px ${FF}`,
+                  cursor: selectedInsertField ? 'pointer' : 'not-allowed',
+                }}
+              >
+                + Insert into Max Limit
+              </button>
+            </div>
+            <TextField
+              label="Max Limit Formula"
+              value={field.logicMaxFormula || ''}
+              onChange={(v) => update({ logicMaxFormula: v })}
+              placeholder="e.g. Math.floor(({stores} * 2) / 4)"
+              mono
+              hint="If user input exceeds this formula, validation fails."
+            />
+            <TextField
+              label="Error Message if Exceeded"
+              value={field.logicErrorMessage || ''}
+              onChange={(v) => update({ logicErrorMessage: v })}
+              placeholder="e.g. Parking passes cannot exceed 1 per 4 passes."
+            />
+          </div>
+
+          {/* Dynamic Value Formula (Optional) */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ font: `700 13px ${FF}`, color: C.n800 }}>Auto-Compute Field Value (Optional)</div>
+            <div style={{ font: `400 11px ${FF}`, color: C.n500 }}>
+              Make this field's value calculate automatically from other inputs.
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                disabled={!selectedInsertField}
+                onClick={() => {
+                  if (!selectedInsertField) return;
+                  const cur = field.logicFormula || '';
+                  const toIns = `{${selectedInsertField}}`;
+                  update({ logicFormula: cur ? `${cur} ${toIns}` : toIns });
+                }}
+                style={{
+                  padding: '4px 10px',
+                  borderRadius: 4,
+                  background: selectedInsertField ? C.p600 : C.n200,
+                  color: '#fff',
+                  border: 'none',
+                  font: `600 11px ${FF}`,
+                  cursor: selectedInsertField ? 'pointer' : 'not-allowed',
+                }}
+              >
+                + Insert into Value Formula
+              </button>
+            </div>
+            <TextField
+              label="Value Formula"
+              value={field.logicFormula || ''}
+              onChange={(v) => update({ logicFormula: v })}
+              placeholder="e.g. {stores} * 2"
+              mono
+              hint="If set, this field auto-calculates live."
+            />
+          </div>
         </div>
       )}
     </div>

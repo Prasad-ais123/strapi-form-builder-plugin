@@ -27,6 +27,8 @@ export interface PaymentConfig {
   amount: number;
   currency: string;
   description?: string;
+  amountType?: 'fixed' | 'calculated';
+  amountFormula?: string;
 }
 
 export interface FieldOption {
@@ -66,6 +68,10 @@ export interface FormField {
   childMinLength?: number;
   childMaxLength?: number;
   childPattern?: string;
+  logicFormula?: string;
+  logicMaxFormula?: string;
+  logicMinFormula?: string;
+  logicErrorMessage?: string;
 }
 
 export interface ConditionalRule {

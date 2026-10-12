@@ -17,7 +17,12 @@ A visual drag-and-drop form builder plugin for [Strapi 5](https://strapi.io). Cr
 
 - **Drag-and-drop builder** — reorder fields visually inside the Strapi admin.
 - **Starter templates** — begin from Contact, Newsletter, Feedback, Job application, Event RSVP, or a blank form.
-- **Rich field types** — text, email, number, phone, URL, password, date, time, textarea, select, radio, checkbox, checkbox-group, hidden, heading, paragraph, divider.
+- **Rich field types** — text, email, number, phone, URL, password, date, time, textarea, select, radio, checkbox, checkbox-group, hidden, heading, paragraph, divider, plus new **Dynamic Select**, **States**, and **Payment** fields.
+- **Dynamic Select & child inputs** — choose quantity (e.g. 1–4) and dynamically generate required child input fields (e.g. attendee or store names) in a responsive grid.
+- **Country state dropdowns** — preconfigured state/province selections for US, CA, IN, GB, AU, DE, FR, MX, BR, ES, IT, JP.
+- **PayPal payments & dynamic pricing** — single payment button per form with fixed USD pricing or dynamic math formulas (e.g. `({passes} * 25) + ({parking} * 10)`), with server-side tamper protection.
+- **Field logic & dynamic constraints** — configure dynamic max/min limit rules (`logicMaxFormula`, `logicMinFormula`) and auto-calculated values (`logicFormula`) using cross-field tokens like `{field_name}` and standard math functions (`Math.floor`, `Math.min`, `Math.max`).
+- **Form scheduling** — configure Start Date and Expiry Date with public embed guards and backend submission enforcement.
 - **Field validation** — required, minLength, maxLength, min value, max value, email, URL, regex pattern — all configurable per field with custom error messages.
 - **Draft / Publish** — draft edits stay private; the public page and embed always serve the last **published** version, so saving a draft never affects the live form.
 - **Public page** — one toggle generates a hosted page at `/api/strapi-plugin-form-builder-cms/page/:slug` (available once the form is published).
@@ -26,8 +31,8 @@ A visual drag-and-drop form builder plugin for [Strapi 5](https://strapi.io). Cr
 - **CAPTCHA** — optional Cloudflare Turnstile or Google reCAPTCHA v2 per form, verified server-side (fail-closed). The secret key never reaches the browser.
 - **Hidden tracking fields** — capture UTM parameters, referrers or campaign IDs from the page URL into every submission.
 - **Visual style editor** — a dedicated Style mode with a live Desktop/Mobile preview: accent, fonts, backgrounds, corners, field & button styles, spacing, shadow, card border and placement, plus editable colour palettes. No CSS required; changes follow draft / publish.
-- **Submission inbox** — search, filter by status (new / read / archived), bulk mark-as-read / archive / delete, per-form column picker, a detail drawer with next/previous navigation, and CSV export.
-- **Form preview** — preview the rendered form inside the admin before publishing.
+- **Submission inbox** — search, filter by status (new / read / archived), bulk mark-as-read / archive / delete, per-form column picker, vertically stacked dynamic array values, dedicated transaction ID / payment columns, a detail drawer with next/previous navigation, and CSV export.
+- **Form preview** — preview the rendered form inside the admin before publishing with real-time reactive formulas and error messages.
 
 ---
 
@@ -181,9 +186,12 @@ These routes require no authentication and are safe to call from the browser.
 | `time` | Time picker |
 | `textarea` | Multi-line text |
 | `select` | Dropdown — configure options in the settings panel |
+| `state` | Preconfigured country states/provinces dropdown (US, CA, IN, GB, AU, DE, FR, MX, BR, ES, IT, JP) |
+| `dynamic-select` | Range dropdown that dynamically generates required child inputs (e.g. attendee names) in a 2-column grid |
 | `radio` | Radio group — configure options in the settings panel |
 | `checkbox` | Single checkbox (agree / consent) |
 | `checkbox-group` | Multiple checkboxes — configure options in the settings panel |
+| `payment` | PayPal checkout button — fixed USD amount or dynamic calculation formula (max 1 per form) |
 | `hidden` | Invisible tracking field — prefilled from a URL query parameter (e.g. `utm_source`) or a default value, then stored with the submission |
 | `heading` | Non-input heading label |
 | `paragraph` | Non-input descriptive text |
@@ -206,6 +214,14 @@ These routes require no authentication and are safe to call from the browser.
 
 Each rule accepts an optional **custom error message**. The same rule type cannot be added twice to the same field.
 
+### Field Logic & Cross-Field Rules (Logic Tab)
+
+Quantifiable fields (`number`, `select`, `dynamic-select`, `radio`, `checkbox`, `state`) feature a dedicated **Logic** tab:
+- **Dynamic Max Limit Formula (`logicMaxFormula`)**: Restricts the maximum allowed value based on formulas like `Math.floor({tickets} / 4)` with custom error messages.
+- **Auto-Compute Formula (`logicFormula`)**: Recalculates field values automatically on the fly (e.g. `{stores} * 2`).
+
+For complete examples, see [NEW_FEATURES_README.md](file:///d:/Prasad/Github/strapi-plugin-form-builder-cms/NEW_FEATURES_README.md).
+
 ---
 
 ## Form settings
@@ -216,11 +232,13 @@ Each rule accepts an optional **custom error message**. The same rule type canno
 | Submit button text | Label on the submit button |
 | Success message | Message shown after a successful submission |
 | Public page | Generates a hosted page URL for the form (served once published) |
+| Start date | Datetime before which submissions and the public form are locked |
+| Expiry date | Datetime after which submissions and the public form expire |
 | Honeypot protection | Adds a hidden field to silently discard bot submissions |
 | Rate limiting | Caps submissions per IP each hour (configurable max) |
 | CAPTCHA | None, Cloudflare Turnstile or Google reCAPTCHA v2 — with a **Test secret key** button to validate credentials before publishing |
 | Custom styles | Enables the visual **Style** editor for the form (see below) |
-| Redirect URL | Where to send the visitor after a successful submit |
+| Redirect URL | Where to send the visitor after a successful submit (defaults to null for in-place success display) |
 
 ---
 

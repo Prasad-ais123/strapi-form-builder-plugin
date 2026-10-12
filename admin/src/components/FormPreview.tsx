@@ -1,5 +1,18 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo, useContext } from 'react';
 import { FormField, FormSettings } from '../types';
+import { evaluateFormula, formatCalculatedValue } from '../utils/formula';
+
+const PreviewContext = React.createContext<{
+  formData: Record<string, any>;
+  computedValues: Record<string, number>;
+  dynamicErrors: Record<string, string>;
+  setFieldValue: (name: string, val: any) => void;
+}>({
+  formData: {},
+  computedValues: {},
+  dynamicErrors: {},
+  setFieldValue: () => {},
+});
 
 /* ── shared tokens ─────────────────────────────────────────────────── */
 const TOKEN = {
@@ -58,24 +71,30 @@ function Label({ field }: { field: FormField }) {
 /* ── individual field renderers ────────────────────────────────────── */
 
 function TextField({ field }: { field: FormField }) {
+  const { formData, computedValues, setFieldValue } = useContext(PreviewContext);
   const typeMap: Record<string, string> = {
-    text: 'text',
     email: 'email',
     number: 'number',
     phone: 'tel',
-    password: 'password',
     url: 'url',
+    password: 'password',
     date: 'date',
     time: 'time',
   };
+  const isComputed = !!field.logicFormula;
+  const displayVal = isComputed
+    ? String(computedValues[field.name] ?? '')
+    : (formData[field.name] ?? '');
   return (
     <div style={fieldWrap}>
       <Label field={field} />
       <input
         type={typeMap[field.type] ?? 'text'}
         placeholder={field.placeholder}
-        style={inputBase}
-        readOnly
+        value={displayVal}
+        onChange={(e) => !isComputed && setFieldValue(field.name, e.target.value)}
+        readOnly={isComputed}
+        style={{ ...inputBase, ...(isComputed ? { background: '#f6f6f9', cursor: 'default' } : {}) }}
       />
       {field.helpText && <p style={helpStyle}>{field.helpText}</p>}
     </div>
@@ -83,13 +102,15 @@ function TextField({ field }: { field: FormField }) {
 }
 
 function TextareaField({ field }: { field: FormField }) {
+  const { formData, setFieldValue } = useContext(PreviewContext);
   return (
     <div style={fieldWrap}>
       <Label field={field} />
       <textarea
         placeholder={field.placeholder}
+        value={formData[field.name] ?? ''}
+        onChange={(e) => setFieldValue(field.name, e.target.value)}
         style={{ ...inputBase, height: 88, padding: '8px 12px', resize: 'vertical' }}
-        readOnly
       />
       {field.helpText && <p style={helpStyle}>{field.helpText}</p>}
     </div>
@@ -97,9 +118,10 @@ function TextareaField({ field }: { field: FormField }) {
 }
 
 function SelectField({ field }: { field: FormField }) {
-  const [val, setVal] = useState('');
+  const { formData, setFieldValue } = useContext(PreviewContext);
+  const val = formData[field.name] ?? '';
   const isDynamic = field.min !== undefined && field.max !== undefined && !field.country;
-  const count = parseInt(val, 10) || 0;
+  const count = parseInt(String(val), 10) || 0;
   const itemLabel = field.itemLabel || 'Item';
   return (
     <div style={fieldWrap}>
@@ -107,7 +129,7 @@ function SelectField({ field }: { field: FormField }) {
       <div style={{ position: 'relative' }}>
         <select
           value={val}
-          onChange={(e) => setVal(e.target.value)}
+          onChange={(e) => setFieldValue(field.name, e.target.value)}
           style={{
             ...inputBase,
             appearance: 'none',
@@ -320,8 +342,16 @@ function CheckboxGroupField({ field }: { field: FormField }) {
 }
 
 function PaymentField({ field }: { field: FormField }) {
+  const { formData, computedValues } = useContext(PreviewContext);
   const p = field.payment || { provider: 'paypal', amount: 1, currency: 'USD', description: '' };
-  const formattedAmount = `${p.currency || 'USD'} ${Number(p.amount ?? 1).toLocaleString()}`;
+  let finalAmount = p.amount ?? 1;
+  if (p.amountType === 'calculated' && p.amountFormula) {
+    finalAmount = evaluateFormula(p.amountFormula, { ...formData, ...computedValues });
+  }
+  const formattedAmount = `${p.currency || 'USD'} ${Number(finalAmount).toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
   return (
     <div style={fieldWrap}>
       <Label field={field} />
@@ -330,8 +360,15 @@ function PaymentField({ field }: { field: FormField }) {
           {p.description}
         </p>
       )}
-      <div style={{ fontSize: 18, fontWeight: 700, color: TOKEN.text, margin: '4px 0' }}>
-        {formattedAmount}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 0', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 18, fontWeight: 700, color: TOKEN.text }}>
+          {formattedAmount}
+        </span>
+        {p.amountType === 'calculated' && p.amountFormula && (
+          <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#4945ff', background: '#f0f0ff', border: '1px solid #d9d8ff', borderRadius: 4, padding: '2px 6px' }}>
+            ƒ = {p.amountFormula}
+          </span>
+        )}
       </div>
       <button
         type="button"
@@ -363,6 +400,7 @@ function PaymentField({ field }: { field: FormField }) {
 /* ── dispatcher ─────────────────────────────────────────────────────── */
 
 function PreviewField({ field }: { field: FormField }) {
+  const { dynamicErrors } = useContext(PreviewContext);
   const half = field.width === 'half';
   const colSpan = half ? 1 : 2;
 
@@ -426,6 +464,11 @@ function PreviewField({ field }: { field: FormField }) {
   return (
     <div className={field.cssClass || undefined} style={{ gridColumn: `span ${colSpan}` }}>
       {content}
+      {dynamicErrors[field.name] && (
+        <p style={{ color: TOKEN.danger, fontSize: 12, margin: '4px 0 0', fontWeight: 500 }}>
+          {dynamicErrors[field.name]}
+        </p>
+      )}
     </div>
   );
 }
@@ -446,6 +489,37 @@ interface Props {
  * Closes on scrim click, the header ✕, or Escape.
  */
 export function FormPreview({ title, description, fields, settings, open, onClose }: Props) {
+  const [formData, setFormData] = useState<Record<string, any>>({});
+  const setFieldValue = (name: string, val: any) => {
+    setFormData((prev) => ({ ...prev, [name]: val }));
+  };
+
+  const computedValues = useMemo(() => {
+    const vals: Record<string, number> = {};
+    for (const field of fields) {
+      if (field.logicFormula) {
+        const merged = { ...formData, ...vals };
+        vals[field.name] = evaluateFormula(field.logicFormula, merged);
+      }
+    }
+    return vals;
+  }, [fields, formData]);
+
+  const dynamicErrors = useMemo(() => {
+    const errs: Record<string, string> = {};
+    for (const field of fields) {
+      if (field.logicMaxFormula) {
+        const merged = { ...formData, ...computedValues };
+        const maxLimit = evaluateFormula(field.logicMaxFormula, merged);
+        const userVal = Number(formData[field.name] ?? 0);
+        if (formData[field.name] !== undefined && formData[field.name] !== '' && userVal > maxLimit) {
+          errs[field.name] = field.logicErrorMessage || `${field.label} cannot exceed ${maxLimit}`;
+        }
+      }
+    }
+    return errs;
+  }, [fields, formData, computedValues]);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -458,7 +532,7 @@ export function FormPreview({ title, description, fields, settings, open, onClos
   if (!open) return null;
 
   return (
-    <>
+    <PreviewContext.Provider value={{ formData, computedValues, dynamicErrors, setFieldValue }}>
       <div
         onClick={onClose}
         style={{ position: 'fixed', inset: 0, background: 'rgba(33,33,52,.4)', zIndex: 50 }}
@@ -588,6 +662,6 @@ export function FormPreview({ title, description, fields, settings, open, onClos
           </div>
         </div>
       </div>
-    </>
+    </PreviewContext.Provider>
   );
 }

@@ -712,7 +712,11 @@ function createField(type: FieldType, order: number): FormField {
     type: isState || isDynamicSelect ? 'select' : type,
     // unique per-field name derived from the uuid — Date.now() collided for fields added in the same ms
     name: `${isState ? 'state' : isDynamicSelect ? 'dynamic_select' : type}_${id.slice(0, 8)}`,
-    label: isState ? 'State' : isDynamicSelect ? 'Dynamic Select' : type.charAt(0).toUpperCase() + type.slice(1),
+    label: isState
+      ? 'State'
+      : isDynamicSelect
+        ? 'Dynamic Select'
+        : type.charAt(0).toUpperCase() + type.slice(1),
     placeholder: isState ? 'Select a state…' : isDynamicSelect ? 'Select a number…' : '',
     helpText: '',
     required: type === 'payment',
@@ -739,6 +743,7 @@ function createField(type: FieldType, order: number): FormField {
             amount: 1,
             currency: 'USD',
             description: '',
+            amountType: 'fixed',
           }
         : undefined,
   };
@@ -1328,7 +1333,13 @@ export function FormBuilderPage() {
             </div>
           </div>
 
-          {selectedField && <FieldSettingsPanel field={selectedField} onChange={updateField} />}
+          {selectedField && (
+            <FieldSettingsPanel
+              field={selectedField}
+              allFields={fields}
+              onChange={updateField}
+            />
+          )}
         </Flex>
       ) : (
         <StyleMode

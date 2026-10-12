@@ -67,10 +67,25 @@ function SortableFieldRow({
       >
         <DragDots active={selected} />
       </span>
-      <div style={{ flex: 1, font: `600 15px ${FF}`, color: C.n900, display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+      <div style={{ flex: 1, font: `600 15px ${FF}`, color: C.n900, display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flexWrap: 'wrap' }}>
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{field.label || '(no label)'}</span>
         {field.required && <span style={{ color: C.dng600, fontWeight: 700 }}>*</span>}
         <span style={{ fontWeight: 400, color: C.n500 }}>— {typeName(field.type)}</span>
+        {field.logicMaxFormula && (
+          <span style={{ font: `500 11px ui-monospace, monospace`, color: C.wrn700, background: C.wrn100, border: '1px solid #f2d9a6', borderRadius: 4, padding: '1px 6px' }}>
+            max: {field.logicMaxFormula}
+          </span>
+        )}
+        {field.logicFormula && (
+          <span style={{ font: `500 11px ui-monospace, monospace`, color: C.p700, background: C.p100, border: `1px solid ${C.p200}`, borderRadius: 4, padding: '1px 6px' }}>
+            ƒ = {field.logicFormula}
+          </span>
+        )}
+        {field.type === 'payment' && field.payment?.amountType === 'calculated' && field.payment?.amountFormula && (
+          <span style={{ font: `500 11px ui-monospace, monospace`, color: C.p700, background: C.p100, border: `1px solid ${C.p200}`, borderRadius: 4, padding: '1px 6px' }}>
+            ƒ = {field.payment.amountFormula}
+          </span>
+        )}
       </div>
       {deco ? (
         <span style={{ font: `600 10px ${FF}`, letterSpacing: '.3px', textTransform: 'uppercase', color: C.wrn700, background: C.wrn100, border: '1px solid #f2d9a6', borderRadius: 4, padding: '3px 7px', flex: 'none' }}>Deco</span>

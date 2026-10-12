@@ -1,3 +1,5 @@
+import { evaluateFormula } from '../utils/formula';
+
 const PLUGIN_ID = 'strapi-plugin-form-builder-cms';
 
 export interface ValidationRule {
@@ -11,6 +13,8 @@ export interface PaymentConfig {
   amount: number;
   currency: string;
   description?: string;
+  amountType?: 'fixed' | 'calculated';
+  amountFormula?: string;
 }
 
 export interface FormField {
@@ -30,6 +34,14 @@ export interface FormField {
   childMinLength?: number;
   childMaxLength?: number;
   childPattern?: string;
+  logicFormula?: string;
+  logicMaxFormula?: string;
+  logicMinFormula?: string;
+  logicErrorMessage?: string;
+  formula?: string;
+  formulaPrefix?: string;
+  formulaSuffix?: string;
+  formulaDecimals?: number;
 }
 
 export interface ValidationResult {
@@ -40,13 +52,64 @@ export interface ValidationResult {
 const validation = {
   validate(fields: FormField[], data: Record<string, any>): ValidationResult {
     const errors: Record<string, string[]> = {};
-    const decorative = ['heading', 'paragraph', 'divider', 'hidden', 'payment'];
+    const decorative = ['heading', 'paragraph', 'divider', 'hidden'];
+
+    // Pre-pass: Auto-evaluate any field with logicFormula
+    for (const field of fields) {
+      if (field.logicFormula) {
+        data[field.name] = evaluateFormula(field.logicFormula, data);
+      } else if (field.type === 'calculated') {
+        data[field.name] = evaluateFormula(field.formula || '', data);
+      }
+    }
 
     for (const field of fields) {
       if (decorative.includes(field.type)) continue;
 
+      if (field.type === 'calculated') {
+        const computed = Number(data[field.name] ?? 0);
+        const fieldErrors: string[] = [];
+        if (field.max !== undefined && computed > field.max) {
+          fieldErrors.push(`${field.label} exceeds maximum allowed (${field.max})`);
+        }
+        if (field.min !== undefined && computed < field.min) {
+          fieldErrors.push(`${field.label} is below minimum allowed (${field.min})`);
+        }
+        if (fieldErrors.length > 0) {
+          errors[field.name] = fieldErrors;
+        }
+        continue;
+      }
+
+      if (field.type === 'payment') {
+        if (field.payment?.amountType === 'calculated' && field.payment.amountFormula) {
+          const expectedAmt = evaluateFormula(field.payment.amountFormula, data);
+          const submittedAmt = data.amount !== undefined ? Number(data.amount) : undefined;
+          if (submittedAmt !== undefined && Math.abs(submittedAmt - expectedAmt) > 0.01) {
+            errors[field.name] = [`Payment amount mismatch: expected ${expectedAmt}, got ${submittedAmt}`];
+          }
+        }
+        continue;
+      }
+
       const value = data[field.name];
       const fieldErrors: string[] = [];
+
+      // Field Logic Tab Dynamic Constraints
+      if (field.logicMaxFormula) {
+        const maxLimit = evaluateFormula(field.logicMaxFormula, data);
+        const numVal = Number(value);
+        if (!isNaN(numVal) && numVal > maxLimit) {
+          fieldErrors.push(field.logicErrorMessage || `${field.label} cannot exceed ${maxLimit}`);
+        }
+      }
+      if (field.logicMinFormula) {
+        const minLimit = evaluateFormula(field.logicMinFormula, data);
+        const numVal = Number(value);
+        if (!isNaN(numVal) && numVal < minLimit) {
+          fieldErrors.push(field.logicErrorMessage || `${field.label} must be at least ${minLimit}`);
+        }
+      }
 
       if (field.required && this.isEmpty(value)) {
         const reqRule = field.validation?.find((v) => v.type === 'required');
@@ -98,22 +161,20 @@ const validation = {
           hasEmptyChild = true;
         }
 
+        const emptyIndices: number[] = [];
         for (let idx = 0; idx < expectedCount; idx++) {
           const valStr = String(items[idx] ?? '').trim();
           if (!valStr) {
-            hasEmptyChild = true;
-            fieldErrors.push(`${field.label}: ${labelPrefix} #${idx + 1} is required`);
+            emptyIndices.push(idx);
           }
         }
-        if (
-          hasEmptyChild &&
-          !fieldErrors.includes(
-            `${field.label}: all ${expectedCount} ${field.itemLabel ? field.itemLabel.toLowerCase() + 's' : 'items'} are required`
-          )
-        ) {
+        if (emptyIndices.length > 0) {
           fieldErrors.push(
             `${field.label}: all ${expectedCount} ${field.itemLabel ? field.itemLabel.toLowerCase() + 's' : 'items'} are required`
           );
+          for (const idx of emptyIndices) {
+            fieldErrors.push(`${field.label}: ${labelPrefix} #${idx + 1} is required`);
+          }
         }
 
         // Validate child input constraints (type, minLength, maxLength, pattern)

@@ -89,8 +89,14 @@ function PreviewInput({ field }: { field: FormField }) {
     const p = field.payment || { provider: 'paypal', amount: 1, currency: 'USD', description: '' };
     return (
       <div style={{ border: `1px solid ${C.n200}`, borderRadius: 6, padding: '12px 14px', background: C.n100, display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {p.description && <div style={{ fontSize: 12, color: C.n600 }}>{p.description}</div>}
-        <div style={{ fontSize: 16, fontWeight: 700, color: C.n900 }}>{p.currency || 'USD'} {Number(p.amount ?? 1).toLocaleString()}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: C.n900 }}>{p.currency || 'USD'} {Number(p.amount ?? 1).toLocaleString()}</div>
+          {p.amountType === 'calculated' && p.amountFormula && (
+            <span style={{ fontSize: 11, fontFamily: 'monospace', color: C.p700, background: C.p100, border: `1px solid ${C.p200}`, borderRadius: 4, padding: '1px 5px' }}>
+              ƒ = {p.amountFormula}
+            </span>
+          )}
+        </div>
         <button type="button" disabled style={{ height: 36, background: '#0070ba', color: '#fff', border: 'none', borderRadius: 4, fontWeight: 600, fontSize: 13, cursor: 'not-allowed', opacity: 0.85 }}>
           Pay with PayPal
         </button>

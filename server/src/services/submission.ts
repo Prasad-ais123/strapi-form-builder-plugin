@@ -1,3 +1,5 @@
+import { evaluateFormula } from '../utils/formula';
+
 const PLUGIN_ID = 'strapi-plugin-form-builder-cms';
 const SUBMISSION_UID = `plugin::${PLUGIN_ID}.form-submission`;
 const FORM_UID = `plugin::${PLUGIN_ID}.form`;
@@ -182,12 +184,18 @@ export default ({ strapi }: { strapi: any }) => ({
       body.payment_status ??
       (transactionId ? 'completed' : paymentField ? 'pending' : null);
 
-    const amountVal =
+    let amountVal =
       body.amount ??
       body.paymentAmount ??
       body.payment_amount ??
-      paymentField?.payment?.amount ??
       null;
+    if (amountVal == null && paymentField?.payment) {
+      if (paymentField.payment.amountType === 'calculated' && paymentField.payment.amountFormula) {
+        amountVal = evaluateFormula(paymentField.payment.amountFormula, clean);
+      } else {
+        amountVal = paymentField.payment.amount ?? null;
+      }
+    }
     const amount = amountVal != null && amountVal !== '' ? Number(amountVal) : null;
     const paymentCurrency =
       body.paymentCurrency ??
@@ -200,6 +208,10 @@ export default ({ strapi }: { strapi: any }) => ({
       body.payment_provider ??
       paymentField?.payment?.provider ??
       (paymentField ? 'paypal' : null);
+
+    if (paymentField && amount != null) {
+      clean[paymentField.name] = `${paymentCurrency || 'USD'} ${Number(amount).toFixed(2)}`;
+    }
 
     try {
       await strapi.db.query(SUBMISSION_UID).create({
@@ -296,6 +308,7 @@ export default ({ strapi }: { strapi: any }) => ({
       submissions.some(
         (s: any) => s.paymentStatus || s.transactionId || s.data?.payment || s.data?.orderId
       );
+    const paymentField = fields.find((f: any) => f.type === 'payment');
 
     const paymentHeaders = hasPayment
       ? ['paymentStatus', 'transactionId', 'amount', 'paymentCurrency', 'paymentProvider']
@@ -337,6 +350,13 @@ export default ({ strapi }: { strapi: any }) => ({
             ]
           : []),
         ...exportColumns.map((col) => {
+          if (paymentField && col.key === paymentField.name) {
+            const amt = s.amount ?? s.data?.amount;
+            const cur = s.paymentCurrency ?? s.data?.currency ?? 'USD';
+            if (amt != null && amt !== '' && !isNaN(Number(amt))) {
+              return `${cur} ${Number(amt).toFixed(2)}`;
+            }
+          }
           const raw = s.data?.[col.key];
           return Array.isArray(raw) ? raw.join('; ') : (raw ?? '');
         }),

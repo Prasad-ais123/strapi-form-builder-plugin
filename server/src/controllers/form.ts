@@ -174,14 +174,25 @@ function embedScript(): string {
     // falling back to a configured default. Never visible; submitted + stored like any field.
     var params = new URLSearchParams(window.location.search);
     (form.fields || []).forEach(function (field) {
-      if (field.type !== 'hidden') return;
-      var hidden = document.createElement('input');
-      hidden.type = 'hidden';
-      hidden.name = field.name;
-      var val = field.defaultValue != null ? String(field.defaultValue) : '';
-      if (field.queryParam && params.get(field.queryParam) !== null) val = params.get(field.queryParam);
-      hidden.value = val;
-      formEl.appendChild(hidden);
+      if (field.type === 'hidden') {
+        var hidden = document.createElement('input');
+        hidden.type = 'hidden';
+        hidden.name = field.name;
+        var val = field.defaultValue != null ? String(field.defaultValue) : '';
+        if (field.queryParam && params.get(field.queryParam) !== null) val = params.get(field.queryParam);
+        hidden.value = val;
+        formEl.appendChild(hidden);
+      } else if (field.type === 'calculated') {
+        var hiddenCalc = document.createElement('input');
+        hiddenCalc.type = 'hidden';
+        hiddenCalc.name = field.name;
+        hiddenCalc.setAttribute('data-field-type', 'calculated');
+        hiddenCalc.setAttribute('data-formula', field.formula || '');
+        if (field.min !== undefined && field.min !== null) hiddenCalc.setAttribute('data-min', String(field.min));
+        if (field.max !== undefined && field.max !== null) hiddenCalc.setAttribute('data-max', String(field.max));
+        hiddenCalc.value = '0';
+        formEl.appendChild(hiddenCalc);
+      }
     });
 
     if (captchaOn) mountCaptcha(formEl, captchaCfg);
@@ -196,7 +207,127 @@ function embedScript(): string {
       formEl.appendChild(btn);
     }
 
-    var submitText = (form.settings && form.settings.submitButtonText) || 'Submit';
+    function evaluateFormula(formula, data, min, max) {
+      if (!formula || typeof formula !== 'string' || !formula.trim()) return 0;
+      var expr = formula.replace(/\{([a-zA-Z0-9_-]+)\}/g, function (_, k) {
+        var v = data[k];
+        if (v === undefined || v === null || v === '') return '0';
+        if (Array.isArray(v)) return String(v.length);
+        var n = Number(v);
+        return isNaN(n) ? '0' : String(n);
+      });
+      var stripped = expr.replace(/\bMath\.(floor|ceil|round|abs|min|max|pow)\b/g, '');
+      if (/[a-zA-Z_$]/.test(stripped)) return 0;
+      try {
+        var fn = new Function('Math', 'return (' + expr + ');');
+        var res = fn(Math);
+        res = (typeof res === 'number' && !isNaN(res) && isFinite(res)) ? res : 0;
+        if (min !== undefined && min !== null && !isNaN(Number(min))) res = Math.max(Number(min), res);
+        if (max !== undefined && max !== null && !isNaN(Number(max))) res = Math.min(Number(max), res);
+        return res;
+      } catch (err) {
+        return 0;
+      }
+    }
+
+    function recalculateFormulas() {
+      var currentData = {};
+      new FormData(formEl).forEach(function (v, k) {
+        if (!k.endsWith('[]')) {
+          currentData[k] = v;
+        }
+      });
+
+      // Auto-compute field values for fields with data-logic-formula
+      formEl.querySelectorAll('.sfb-field[data-logic-formula]').forEach(function (fieldWrapper) {
+        var lFormula = fieldWrapper.getAttribute('data-logic-formula') || '';
+        var fName = fieldWrapper.getAttribute('data-field-name');
+        var inp = fieldWrapper.querySelector('input, select, textarea');
+        if (inp && lFormula) {
+          var computed = evaluateFormula(lFormula, currentData);
+          inp.value = computed;
+          currentData[fName] = computed;
+        }
+      });
+
+      // Field Logic Tab Dynamic Constraints
+      formEl.querySelectorAll('.sfb-field').forEach(function (fieldWrapper) {
+        var maxFormula = fieldWrapper.getAttribute('data-logic-max-formula');
+        var minFormula = fieldWrapper.getAttribute('data-logic-min-formula');
+        if (!maxFormula && !minFormula) return;
+
+        var fName = fieldWrapper.getAttribute('data-field-name');
+        var customError = fieldWrapper.getAttribute('data-logic-error-message');
+        var inp = fieldWrapper.querySelector('input, select, textarea');
+        var val = inp ? Number(inp.value) : NaN;
+
+        var existingErr = fieldWrapper.querySelector('.sfb-dynamic-limit-error');
+        if (existingErr) existingErr.remove();
+
+        var errMsg = null;
+        if (maxFormula && !isNaN(val)) {
+          var maxLimit = evaluateFormula(maxFormula, currentData);
+          if (val > maxLimit) {
+            var labelEl = fieldWrapper.querySelector('.sfb-label');
+            var labelText = (labelEl ? labelEl.textContent : fName).replace('*', '').trim();
+            errMsg = customError || (labelText + ' cannot exceed ' + maxLimit);
+          }
+        }
+        if (!errMsg && minFormula && !isNaN(val)) {
+          var minLimit = evaluateFormula(minFormula, currentData);
+          if (val < minLimit) {
+            var labelEl2 = fieldWrapper.querySelector('.sfb-label');
+            var labelText2 = (labelEl2 ? labelEl2.textContent : fName).replace('*', '').trim();
+            errMsg = customError || (labelText2 + ' must be at least ' + minLimit);
+          }
+        }
+
+        if (errMsg) {
+          fieldWrapper.classList.add('sfb-field--error');
+          var errEl = document.createElement('p');
+          errEl.className = 'sfb-field-error sfb-dynamic-limit-error';
+          errEl.textContent = errMsg;
+          fieldWrapper.appendChild(errEl);
+        } else if (!fieldWrapper.querySelector('.sfb-field-error:not(.sfb-dynamic-limit-error)')) {
+          fieldWrapper.classList.remove('sfb-field--error');
+        }
+      });
+
+      formEl.querySelectorAll('input[data-field-type="calculated"]').forEach(function (calcInp) {
+        var formula = calcInp.getAttribute('data-formula') || '';
+        var minAttr = calcInp.getAttribute('data-min');
+        var maxAttr = calcInp.getAttribute('data-max');
+        var minVal = minAttr !== null ? Number(minAttr) : undefined;
+        var maxVal = maxAttr !== null ? Number(maxAttr) : undefined;
+        var prefix = calcInp.getAttribute('data-prefix') || '';
+        var suffix = calcInp.getAttribute('data-suffix') || '';
+        var decimals = parseInt(calcInp.getAttribute('data-decimals') || '0', 10) || 0;
+
+        var computed = evaluateFormula(formula, currentData, minVal, maxVal);
+        var fieldName = calcInp.name;
+        if (fieldName) {
+          currentData[fieldName] = computed;
+        }
+        var formatted = prefix + Number(computed.toFixed(decimals)).toLocaleString() + suffix;
+        calcInp.value = formatted;
+        calcInp.setAttribute('data-computed-value', String(computed));
+      });
+
+      formEl.querySelectorAll('.sfb-payment-placeholder[data-amount-type="calculated"]').forEach(function (pBox) {
+        var pFormula = pBox.getAttribute('data-amount-formula') || '';
+        var pCur = pBox.getAttribute('data-currency') || 'USD';
+        var pComputed = evaluateFormula(pFormula, currentData);
+        var amtEl = pBox.querySelector('.sfb-payment-amount');
+        if (amtEl) {
+          amtEl.textContent = pCur + ' ' + Number(pComputed).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+        pBox.setAttribute('data-current-amount', String(pComputed));
+      });
+    }
+
+    formEl.addEventListener('input', recalculateFormulas);
+    formEl.addEventListener('change', recalculateFormulas);
+    recalculateFormulas();
 
     function clearErrors() {
       formEl.querySelectorAll('.sfb-field-error').forEach(function (el) { el.remove(); });
@@ -220,6 +351,14 @@ function embedScript(): string {
     formEl.addEventListener('submit', function (e) {
       e.preventDefault();
       clearErrors();
+      recalculateFormulas();
+      if (formEl.querySelector('.sfb-dynamic-limit-error')) {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = (form.settings && form.settings.submitButtonText) || 'Submit';
+        }
+        return;
+      }
       if (btn) {
         btn.disabled = true;
         btn.textContent = 'Sending…';
@@ -314,7 +453,7 @@ function embedScript(): string {
   }
 
   function renderField(field) {
-    if (field.type === 'hidden') return null;
+    if (field.type === 'hidden' || field.type === 'calculated') return null;
 
     if (field.type === 'divider') {
       var hr = document.createElement('hr');
@@ -349,6 +488,10 @@ function embedScript(): string {
     if (field.validation && field.validation.length) {
       wrapper.setAttribute('data-validation', JSON.stringify(field.validation));
     }
+    if (field.logicFormula) wrapper.setAttribute('data-logic-formula', field.logicFormula);
+    if (field.logicMaxFormula) wrapper.setAttribute('data-logic-max-formula', field.logicMaxFormula);
+    if (field.logicMinFormula) wrapper.setAttribute('data-logic-min-formula', field.logicMinFormula);
+    if (field.logicErrorMessage) wrapper.setAttribute('data-logic-error-message', field.logicErrorMessage);
     if (field.width !== 'half') wrapper.style.gridColumn = '1 / -1';
 
     if (field.type !== 'checkbox') {
@@ -517,6 +660,13 @@ function embedScript(): string {
       var p = field.payment || { provider: 'paypal', amount: 1, currency: 'USD', description: '' };
       var box = document.createElement('div');
       box.className = 'sfb-payment-placeholder';
+      box.setAttribute('data-field-name', field.name);
+      box.setAttribute('data-provider', p.provider || 'paypal');
+      box.setAttribute('data-currency', p.currency || 'USD');
+      box.setAttribute('data-amount-type', p.amountType || 'fixed');
+      if (p.amountType === 'calculated' && p.amountFormula) {
+        box.setAttribute('data-amount-formula', p.amountFormula);
+      }
       box.style.cssText = 'border:1px solid #dcdce4;border-radius:6px;padding:12px 14px;background:#f6f6f9;display:flex;flex-direction:column;gap:8px;';
       if (p.description) {
         var pDesc = document.createElement('div');
@@ -525,8 +675,9 @@ function embedScript(): string {
         box.appendChild(pDesc);
       }
       var pAmt = document.createElement('div');
+      pAmt.className = 'sfb-payment-amount';
       pAmt.style.cssText = 'font-size:16px;font-weight:700;color:#32324d;';
-      pAmt.textContent = (p.currency || 'USD') + ' ' + Number(p.amount ?? 1).toLocaleString();
+      pAmt.textContent = (p.currency || 'USD') + ' ' + Number(p.amount ?? 1).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       box.appendChild(pAmt);
       var pBtn = document.createElement('button');
       pBtn.type = 'button';
